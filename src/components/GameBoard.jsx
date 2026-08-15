@@ -1,74 +1,103 @@
+// ГЛАВНЫЙ КОМПОНЕНТ ИГРЫ
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Hand } from './Hand';
 import { Card } from './Card';
-import { 
-  initializeGameWithBots, 
-  executeAttack, 
-  useDefenseCard, 
-  discardAndDraw, 
+import { Stats } from './Stats';
+import { History } from './History';
+import {
+  initializeGameWithBots,
+  executeAttack,
+  useDefenseCard,
+  discardAndDraw,
+  clearCompanyTemporaryDefenses,
   checkDefense
 } from '../game/gameLogic';
 import { createHackerBot, createCompanyBot } from '../game/botLogic';
+import { characteristicNames, characteristicIcons } from '../data/characteristics';
+import { useGameStats } from '../hooks/useGameStats';
 
-const characteristicNames = {
-  informationSecurity: 'Инф. безопасность',
-  technologyInfrastructure: 'Технологии',
-  financialStability: 'Финансы',
-  innovationAbility: 'Инновации',
-  reputation: 'Репутация'
-};
-
-// Функция для глубокого копирования состояния с восстановлением методов ботов
+// ============================================================
+// ФУНКЦИЯ ДЛЯ ГЛУБОКОГО КОПИРОВАНИЯ СОСТОЯНИЯ
+// ============================================================
 const deepCopyGameState = (state) => {
   if (!state) return null;
-  
+
+  // Копируем компании с восстановлением методов ботов
   const copiedCompanies = state.companies.map(company => {
     if (company.isHuman) {
-      return { ...company, hand: [...(company.hand || [])] };
+      // Человек-компания - просто копируем
+      return {
+        ...company,
+        hand: [...(company.hand || [])],
+        permanentDefenses: [...(company.permanentDefenses || [])],
+        temporaryDefenses: [...(company.temporaryDefenses || [])],
+        revealedCharacteristics: [...(company.revealedCharacteristics || [])],
+        hideCharacteristics: company.hideCharacteristics
+      };
     } else {
+      // Бот-компания - создаём заново через фабрику
       const bot = createCompanyBot(
-        { 
-          id: company.id, 
-          name: company.name, 
-          characteristics: { ...company.characteristics } 
+        {
+          id: company.id,
+          name: company.name,
+          characteristics: { ...company.characteristics }
         },
         company.difficulty || 'medium'
       );
+      // Восстанавливаем состояние
       bot.health = company.health;
       bot.hand = [...(company.hand || [])];
       bot.permanentDefenses = [...(company.permanentDefenses || [])];
       bot.temporaryDefenses = [...(company.temporaryDefenses || [])];
       bot.isAlive = company.isAlive;
+      bot.revealedCharacteristics = [...(company.revealedCharacteristics || [])];
+      bot.hideCharacteristics = company.hideCharacteristics;
       return bot;
     }
   });
-  
+
+  // Копируем хакеров с восстановлением методов ботов
   const copiedHackers = state.hackers.map(hacker => {
     if (hacker.isHuman) {
-      return { ...hacker, hand: [...(hacker.hand || [])] };
+      // Человек-хакер - просто копируем
+      return {
+        ...hacker,
+        hand: [...(hacker.hand || [])]
+      };
     } else {
+      // Бот-хакер - создаём заново через фабрику
+      const botId = hacker.id.replace('hacker_bot_', '');
       const bot = createHackerBot(
-        hacker.id.replace('hacker_bot_', ''),
+        botId || '1',
         hacker.name,
         hacker.difficulty || 'medium'
       );
+      // Восстанавливаем состояние
       bot.health = hacker.health;
       bot.hand = [...(hacker.hand || [])];
       bot.isAlive = hacker.isAlive;
       return bot;
     }
   });
-  
+
+  // Возвращаем новое состояние
   return {
     ...state,
     companies: copiedCompanies,
     hackers: copiedHackers,
     attackDeck: [...(state.attackDeck || [])],
-    defenseDeck: [...(state.defenseDeck || [])]
+    defenseDeck: [...(state.defenseDeck || [])],
+    attackDiscardPile: [...(state.attackDiscardPile || [])],
+    defenseDiscardPile: [...(state.defenseDiscardPile || [])]
   };
 };
 
-export function GameBoard() {
+// ============================================================
+// ОСНОВНОЙ КОМПОНЕНТ
+// ============================================================
+export function GameBoard({ user, onLogout, onShowProfile }) {
+  // ===== СОСТОЯНИЯ ИГРЫ =====
   const [gameState, setGameState] = useState(null);
   const [selectedAttackCard, setSelectedAttackCard] = useState(null);
   const [selectedCompany, setSelectedCompany] = useState(null);
@@ -81,6 +110,23 @@ export function GameBoard() {
   const processingRef = useRef(false);
   const timeoutRef = useRef(null);
 
+  // ===== СОСТОЯНИЯ СТАТИСТИКИ =====
+  const { stats, addGame, clearStats } = useGameStats();
+  const [showStats, setShowStats] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [currentGameData, setCurrentGameData] = useState({
+    damageDealt: 0,
+    damageTaken: 0,
+    cardsUsed: 0,
+    defensesUsed: 0,
+    rounds: 0
+  });
+  const [isGameFinished, setIsGameFinished] = useState(false);
+
+  // ============================================================
+  // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+  // ============================================================
+
   const addLogMessage = useCallback((msg) => {
     setGameLog(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 30));
   }, []);
@@ -88,69 +134,200 @@ export function GameBoard() {
   const getCurrentPlayer = (state) => {
     if (!state) return null;
     const allPlayers = [...state.hackers, ...state.companies];
-    return allPlayers[state.currentPlayerIndex];
+    const alivePlayers = allPlayers.filter(p => p.isAlive !== false && p.health > 0);
+    if (alivePlayers.length === 0) return null;
+    const index = state.currentPlayerIndex % alivePlayers.length;
+    return alivePlayers[index];
   };
 
+  // ============================================================
+  // ФУНКЦИЯ ВЫХОДА ИЗ ИГРЫ
+  // ============================================================
+  const handleExitGame = () => {
+    if (!gameState) {
+      setRoleSelection(null);
+      setGameState(null);
+      setGameLog([]);
+      return;
+    }
+
+    if (gameState.gameOver) {
+      setRoleSelection(null);
+      setGameState(null);
+      setGameLog([]);
+      setSelectedAttackCard(null);
+      setSelectedCompany(null);
+      setSelectedDefenseCard(null);
+      setMessage('Вы вышли из игры');
+      setCurrentGameData({
+        damageDealt: 0,
+        damageTaken: 0,
+        cardsUsed: 0,
+        defensesUsed: 0,
+        rounds: 0
+      });
+      setIsGameFinished(false);
+      return;
+    }
+
+    // Спрашиваем подтверждение
+    if (window.confirm('Вы уверены, что хотите выйти из игры? Прогресс будет потерян.')) {
+      // Добавляем игру как поражение
+      addGame({
+        role: roleSelection,
+        won: false,
+        damageDealt: currentGameData.damageDealt,
+        damageTaken: currentGameData.damageTaken,
+        cardsUsed: currentGameData.cardsUsed,
+        defensesUsed: currentGameData.defensesUsed,
+        rounds: gameState.currentTurn + 1,
+        opponent: 'Боты'
+      });
+
+      setRoleSelection(null);
+      setGameState(null);
+      setGameLog([]);
+      setSelectedAttackCard(null);
+      setSelectedCompany(null);
+      setSelectedDefenseCard(null);
+      setMessage('Вы вышли из игры');
+      setCurrentGameData({
+        damageDealt: 0,
+        damageTaken: 0,
+        cardsUsed: 0,
+        defensesUsed: 0,
+        rounds: 0
+      });
+      setIsGameFinished(false);
+    }
+  };
+
+  // ============================================================
+  // ПРОВЕРКА ОКОНЧАНИЯ ИГРЫ С СОХРАНЕНИЕМ СТАТИСТИКИ
+  // ============================================================
   const checkGameOver = useCallback((state) => {
     const newState = { ...state };
+
     if (newState.hackers.length === 0) {
       newState.gameOver = true;
       newState.winner = 'companies';
       addLogMessage('🏆 КОМПАНИИ ПОБЕДИЛИ! Все хакеры уничтожены.');
+
+      if (roleSelection === 'hacker' && !newState.gameOverAdded) {
+        newState.gameOverAdded = true;
+        addGame({
+          role: 'hacker',
+          won: false,
+          damageDealt: currentGameData.damageDealt,
+          damageTaken: currentGameData.damageTaken,
+          cardsUsed: currentGameData.cardsUsed,
+          defensesUsed: currentGameData.defensesUsed,
+          rounds: newState.currentTurn + 1,
+          opponent: 'Боты'
+        });
+        setIsGameFinished(true);
+      } else if (roleSelection === 'company' && !newState.gameOverAdded) {
+        newState.gameOverAdded = true;
+        addGame({
+          role: 'company',
+          won: true,
+          damageDealt: currentGameData.damageDealt,
+          damageTaken: currentGameData.damageTaken,
+          cardsUsed: currentGameData.cardsUsed,
+          defensesUsed: currentGameData.defensesUsed,
+          rounds: newState.currentTurn + 1,
+          opponent: 'Боты'
+        });
+        setIsGameFinished(true);
+      }
+
     } else if (newState.companies.length === 0) {
       newState.gameOver = true;
       newState.winner = 'hackers';
       addLogMessage('🏆 ХАКЕРЫ ПОБЕДИЛИ! Все компании уничтожены.');
-    }
-    return newState;
-  }, [addLogMessage]);
 
-  // Выполнение хода бота
+      if (roleSelection === 'hacker' && !newState.gameOverAdded) {
+        newState.gameOverAdded = true;
+        addGame({
+          role: 'hacker',
+          won: true,
+          damageDealt: currentGameData.damageDealt,
+          damageTaken: currentGameData.damageTaken,
+          cardsUsed: currentGameData.cardsUsed,
+          defensesUsed: currentGameData.defensesUsed,
+          rounds: newState.currentTurn + 1,
+          opponent: 'Боты'
+        });
+        setIsGameFinished(true);
+      } else if (roleSelection === 'company' && !newState.gameOverAdded) {
+        newState.gameOverAdded = true;
+        addGame({
+          role: 'company',
+          won: false,
+          damageDealt: currentGameData.damageDealt,
+          damageTaken: currentGameData.damageTaken,
+          cardsUsed: currentGameData.cardsUsed,
+          defensesUsed: currentGameData.defensesUsed,
+          rounds: newState.currentTurn + 1,
+          opponent: 'Боты'
+        });
+        setIsGameFinished(true);
+      }
+    }
+
+    return newState;
+  }, [addLogMessage, roleSelection, addGame, currentGameData]);
+
+  // ============================================================
+  // ВЫПОЛНЕНИЕ ХОДА БОТА
+  // ============================================================
+
   const executeBotTurn = useCallback(async (state) => {
     if (processingRef.current) return state;
     processingRef.current = true;
     setIsProcessing(true);
-    
+
     await new Promise(resolve => {
       timeoutRef.current = setTimeout(resolve, 800);
     });
-    
+
     let newState = deepCopyGameState(state);
     const currentPlayer = getCurrentPlayer(newState);
-    
+
     if (!currentPlayer || currentPlayer.isHuman || newState.gameOver) {
       processingRef.current = false;
       setIsProcessing(false);
       return newState;
     }
-    
+
     addLogMessage(`🤖 Ход: ${currentPlayer.name}`);
-    
+
     try {
       if (currentPlayer.role === 'hacker') {
-        // ХОД ХАКЕРА - атакует
+        // === ХОД ХАКЕРА-БОТА ===
         const aliveCompanies = newState.companies.filter(c => c.isAlive !== false && c.health > 0);
-        
+
         if (aliveCompanies.length > 0 && currentPlayer.chooseTarget) {
           const targetCompany = currentPlayer.chooseTarget(aliveCompanies);
-          
+
           if (targetCompany && currentPlayer.chooseAttackCard) {
             const decision = currentPlayer.chooseAttackCard(targetCompany);
-            
+
             if (decision) {
               if (decision.action === 'discard') {
+                // Сброс карты
                 const cardIndex = currentPlayer.hand.findIndex(c => c.id === decision.card.id);
                 if (cardIndex !== -1) {
                   const discarded = currentPlayer.hand[cardIndex];
                   currentPlayer.hand.splice(cardIndex, 1);
-                  if (newState.attackDeck.length > 0) {
-                    currentPlayer.hand.push(newState.attackDeck.shift());
-                  }
+                  const result = discardAndDraw(newState, 'hacker', currentPlayer.id, discarded.id);
+                  newState = result.gameState;
                   addLogMessage(`🤖 ${currentPlayer.name} сбросил карту ${discarded.name}`);
                 }
               } else {
+                // Атака
                 let selectedChar = null;
-                
+
                 if (decision.card.type === 'choose' && targetCompany.characteristics) {
                   for (const [char, value] of Object.entries(targetCompany.characteristics)) {
                     const hasDefense = checkDefense(targetCompany, char);
@@ -163,11 +340,17 @@ export function GameBoard() {
                     selectedChar = Object.keys(targetCompany.characteristics)[0];
                   }
                 }
-                
+
                 const result = executeAttack(newState, currentPlayer.id, targetCompany.id, decision.card, selectedChar);
                 newState = result.gameState;
-                
+
+                // Обновляем статистику урона
                 if (result.success) {
+                  setCurrentGameData(prev => ({
+                    ...prev,
+                    damageDealt: prev.damageDealt + (result.damage || 0),
+                    cardsUsed: prev.cardsUsed + 1
+                  }));
                   addLogMessage(`🤖 ${currentPlayer.name} атакует ${targetCompany.name}: ${result.message} (урон: ${result.damage})`);
                 } else {
                   addLogMessage(`🤖 ${currentPlayer.name} атакует ${targetCompany.name}: ${result.message}`);
@@ -176,36 +359,39 @@ export function GameBoard() {
             }
           }
         }
-        
       } else if (currentPlayer.role === 'company') {
-        // ХОД КОМПАНИИ - сначала снимаем временные защиты (они уже отыграли свой ход)
+        // === ХОД КОМПАНИИ-БОТА ===
         const company = newState.companies.find(c => c.id === currentPlayer.id);
+
+        // Снимаем временные защиты
         if (company && company.temporaryDefenses && company.temporaryDefenses.length > 0) {
-          const clearedCount = company.temporaryDefenses.length;
           const clearedNames = company.temporaryDefenses.map(d => d.name).join(', ');
           company.temporaryDefenses = [];
           addLogMessage(`🏢 ${company.name}: сняты временные защиты: ${clearedNames}`);
         }
-        
-        // Затем ход компании - активирует защиту
+
+        // Выбираем карту защиты
         if (currentPlayer.chooseDefenseCard) {
           const defenseCard = currentPlayer.chooseDefenseCard();
-          
+
           if (defenseCard) {
             if (defenseCard.action === 'discard') {
               const cardIndex = currentPlayer.hand.findIndex(c => c.id === defenseCard.card.id);
               if (cardIndex !== -1) {
                 const discarded = currentPlayer.hand[cardIndex];
                 currentPlayer.hand.splice(cardIndex, 1);
-                if (newState.defenseDeck.length > 0) {
-                  currentPlayer.hand.push(newState.defenseDeck.shift());
-                }
+                const result = discardAndDraw(newState, 'company', currentPlayer.id, discarded.id);
+                newState = result.gameState;
                 addLogMessage(`🏢 ${currentPlayer.name} сбросил карту ${discarded.name}`);
               }
             } else if (defenseCard) {
               const result = useDefenseCard(newState, currentPlayer.id, defenseCard);
               newState = result.gameState;
               if (result.success) {
+                setCurrentGameData(prev => ({
+                  ...prev,
+                  defensesUsed: prev.defensesUsed + 1
+                }));
                 addLogMessage(`🏢 ${currentPlayer.name} активировал защиту: ${defenseCard.name}`);
               }
             }
@@ -216,27 +402,32 @@ export function GameBoard() {
       console.error('Bot turn error:', error);
       addLogMessage(`⚠️ Ошибка при ходе бота ${currentPlayer.name}`);
     }
-    
+
     // Переход к следующему игроку
     const totalPlayers = newState.hackers.length + newState.companies.length;
-    newState.currentPlayerIndex = (newState.currentPlayerIndex + 1) % totalPlayers;
-    
-    if (newState.currentPlayerIndex === 0) {
-      newState.currentTurn++;
-      addLogMessage(`--- РАУНД ${newState.currentTurn + 1} ---`);
+    if (totalPlayers > 0) {
+      newState.currentPlayerIndex = (newState.currentPlayerIndex + 1) % totalPlayers;
+
+      if (newState.currentPlayerIndex === 0) {
+        newState.currentTurn++;
+        addLogMessage(`--- РАУНД ${newState.currentTurn + 1} ---`);
+      }
     }
-    
+
     newState = checkGameOver(newState);
-    
+
     processingRef.current = false;
     setIsProcessing(false);
     return newState;
   }, [addLogMessage, checkGameOver]);
 
-  // Эффект для автоматического хода ботов
+  // ============================================================
+  // ЭФФЕКТЫ
+  // ============================================================
+
   useEffect(() => {
     if (!gameState || gameState.gameOver || isProcessing) return;
-    
+
     const currentPlayer = getCurrentPlayer(gameState);
     if (currentPlayer && !currentPlayer.isHuman) {
       executeBotTurn(gameState).then(newState => {
@@ -245,7 +436,6 @@ export function GameBoard() {
     }
   }, [gameState, isProcessing, executeBotTurn]);
 
-  // Очистка таймера при размонтировании
   useEffect(() => {
     return () => {
       if (timeoutRef.current) {
@@ -254,8 +444,35 @@ export function GameBoard() {
     };
   }, []);
 
+  // ============================================================
+  // ОБРАБОТЧИКИ ДЕЙСТВИЙ
+  // ============================================================
+
   const startNewGame = (role) => {
     const newGame = initializeGameWithBots(role, 4, 2);
+
+    // Скрываем характеристики компаний для хакера
+    if (role === 'hacker') {
+      newGame.companies.forEach(company => {
+        company.hideCharacteristics = true;
+        company.revealedCharacteristics = [];
+      });
+    } else {
+      newGame.companies.forEach(company => {
+        company.hideCharacteristics = false;
+      });
+    }
+
+    // Сбрасываем статистику текущей игры
+    setCurrentGameData({
+      damageDealt: 0,
+      damageTaken: 0,
+      cardsUsed: 0,
+      defensesUsed: 0,
+      rounds: 0
+    });
+    setIsGameFinished(false);
+
     setGameState(newGame);
     setRoleSelection(role);
     setSelectedAttackCard(null);
@@ -268,34 +485,35 @@ export function GameBoard() {
 
   const endTurn = () => {
     if (!gameState || gameState.gameOver || isProcessing) return;
-    
+
     const currentPlayer = getCurrentPlayer(gameState);
     if (!currentPlayer || !currentPlayer.isHuman) {
       setMessage('Сейчас не ваш ход!');
       return;
     }
-    
+
     const newState = deepCopyGameState(gameState);
-    
-    // Если текущий игрок - компания, снимаем её временные защиты (при принудительном завершении хода)
+
+    // Снимаем временные защиты у компании-игрока
     if (currentPlayer.role === 'company') {
       const company = newState.companies.find(c => c.id === currentPlayer.id);
       if (company && company.temporaryDefenses && company.temporaryDefenses.length > 0) {
-        const clearedCount = company.temporaryDefenses.length;
         const clearedNames = company.temporaryDefenses.map(d => d.name).join(', ');
         company.temporaryDefenses = [];
         addLogMessage(`🏢 ${company.name}: сняты временные защиты: ${clearedNames}`);
       }
     }
-    
+
     const totalPlayers = newState.hackers.length + newState.companies.length;
-    newState.currentPlayerIndex = (newState.currentPlayerIndex + 1) % totalPlayers;
-    
-    if (newState.currentPlayerIndex === 0) {
-      newState.currentTurn++;
-      addLogMessage(`--- РАУНД ${newState.currentTurn + 1} ---`);
+    if (totalPlayers > 0) {
+      newState.currentPlayerIndex = (newState.currentPlayerIndex + 1) % totalPlayers;
+
+      if (newState.currentPlayerIndex === 0) {
+        newState.currentTurn++;
+        addLogMessage(`--- РАУНД ${newState.currentTurn + 1} ---`);
+      }
     }
-    
+
     setGameState(newState);
     setSelectedAttackCard(null);
     setSelectedCompany(null);
@@ -306,33 +524,39 @@ export function GameBoard() {
 
   const handleAttack = () => {
     if (!gameState || isProcessing) return;
-    
+
     const currentPlayer = getCurrentPlayer(gameState);
     if (!currentPlayer || !currentPlayer.isHuman) {
       setMessage('Сейчас не ваш ход!');
       return;
     }
-    
+
     if (!selectedAttackCard || !selectedCompany) {
       setMessage('Выберите карту атаки и компанию');
       return;
     }
-    
+
     if (selectedAttackCard.type === 'choose') {
       setChoosingCharacteristic(selectedAttackCard);
       return;
     }
-    
+
     let newState = deepCopyGameState(gameState);
     const result = executeAttack(newState, currentPlayer.id, selectedCompany.id, selectedAttackCard);
     newState = result.gameState;
-    
+
+    // Обновляем статистику
     if (result.success) {
+      setCurrentGameData(prev => ({
+        ...prev,
+        damageDealt: prev.damageDealt + (result.damage || 0),
+        cardsUsed: prev.cardsUsed + 1
+      }));
       addLogMessage(`⚔️ ${selectedAttackCard.name} -> ${selectedCompany.name}: ${result.message} (урон: ${result.damage})`);
     } else {
       addLogMessage(`❌ ${selectedAttackCard.name} -> ${selectedCompany.name}: ${result.message}`);
     }
-    
+
     const afterAttackState = checkGameOver(newState);
     setGameState(afterAttackState);
     setMessage(result.message);
@@ -343,20 +567,26 @@ export function GameBoard() {
 
   const handleAttackWithChar = (characteristic) => {
     if (!gameState || !choosingCharacteristic || !selectedCompany) return;
-    
+
     const currentPlayer = getCurrentPlayer(gameState);
     if (!currentPlayer || !currentPlayer.isHuman) return;
-    
+
     let newState = deepCopyGameState(gameState);
     const result = executeAttack(newState, currentPlayer.id, selectedCompany.id, choosingCharacteristic, characteristic);
     newState = result.gameState;
-    
+
+    // Обновляем статистику
     if (result.success) {
+      setCurrentGameData(prev => ({
+        ...prev,
+        damageDealt: prev.damageDealt + (result.damage || 0),
+        cardsUsed: prev.cardsUsed + 1
+      }));
       addLogMessage(`⚔️ ${choosingCharacteristic.name} (${characteristicNames[characteristic]}) -> ${selectedCompany.name}: ${result.message}`);
     } else {
       addLogMessage(`❌ ${choosingCharacteristic.name} -> ${selectedCompany.name}: ${result.message}`);
     }
-    
+
     const afterAttackState = checkGameOver(newState);
     setGameState(afterAttackState);
     setMessage(result.message);
@@ -367,32 +597,36 @@ export function GameBoard() {
 
   const handleUseDefense = () => {
     if (!gameState || isProcessing) return;
-    
+
     const currentPlayer = getCurrentPlayer(gameState);
     if (!currentPlayer || !currentPlayer.isHuman) {
       setMessage('Сейчас не ваш ход!');
       return;
     }
-    
+
     if (!selectedDefenseCard) {
       setMessage('Выберите карту защиты');
       return;
     }
-    
+
     const company = gameState.companies.find(c => c.id === currentPlayer.id);
     if (!company) {
       setMessage('Компания не найдена');
       return;
     }
-    
+
     let newState = deepCopyGameState(gameState);
     const result = useDefenseCard(newState, company.id, selectedDefenseCard);
     newState = result.gameState;
-    
+
     if (result.success) {
+      setCurrentGameData(prev => ({
+        ...prev,
+        defensesUsed: prev.defensesUsed + 1
+      }));
       addLogMessage(`🛡️ ${selectedDefenseCard.name} активирована для ${company.name}`);
     }
-    
+
     setGameState(checkGameOver(newState));
     setMessage(result.message);
     setSelectedDefenseCard(null);
@@ -400,13 +634,13 @@ export function GameBoard() {
 
   const handleDiscardCard = (card) => {
     if (!gameState || isProcessing) return;
-    
+
     const currentPlayer = getCurrentPlayer(gameState);
     if (!currentPlayer || !currentPlayer.isHuman) {
       setMessage('Сейчас не ваш ход!');
       return;
     }
-    
+
     // Бесплатный сброс для компании на высокую характеристику
     if (roleSelection === 'company') {
       const charValue = currentPlayer.characteristics?.[card.characteristic];
@@ -420,12 +654,12 @@ export function GameBoard() {
         return;
       }
     }
-    
+
     let newState = deepCopyGameState(gameState);
     const playerType = roleSelection === 'hacker' ? 'hacker' : 'company';
     const result = discardAndDraw(newState, playerType, currentPlayer.id, card.id);
     newState = result.gameState;
-    
+
     if (result.success) {
       setGameState(newState);
       addLogMessage(`🔄 ${card.name} сброшена и заменена`);
@@ -435,99 +669,66 @@ export function GameBoard() {
     }
   };
 
-  // Экран выбора роли
+  // ============================================================
+  // РЕНДЕРИНГ
+  // ============================================================
+
+  // === ЭКРАН ВЫБОРА РОЛИ ===
   if (!roleSelection) {
     return (
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100vh',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-      }}>
-        <h1 style={{ color: 'white', marginBottom: '40px', fontSize: '48px' }}>Cyber Conflict Game</h1>
-        <div style={{ display: 'flex', gap: '30px', flexWrap: 'wrap', justifyContent: 'center' }}>
-          <button
-            onClick={() => startNewGame('hacker')}
-            style={{
-              padding: '20px 40px',
-              fontSize: '24px',
-              backgroundColor: '#ff4757',
-              color: 'white',
-              border: 'none',
-              borderRadius: '12px',
-              cursor: 'pointer'
-            }}
-          >
-            🕵️ Играть за Хакера
-            <div style={{ fontSize: '14px', marginTop: '10px' }}>Вы + 1 бот-хакер против 4 компаний</div>
+      <div className="role-select">
+        <h1>🛡️ Cyber Conflict</h1>
+        <p className="subtitle">Выберите сторону в кибервойне</p>
+        <div className="roles">
+          <button className="role-btn role-hacker" onClick={() => startNewGame('hacker')}>
+            🕵️ Хакер
+            <div className="role-desc">Вы + 1 бот против 4 компаний</div>
           </button>
-          
-          <button
-            onClick={() => startNewGame('company')}
-            style={{
-              padding: '20px 40px',
-              fontSize: '24px',
-              backgroundColor: '#2ed573',
-              color: 'white',
-              border: 'none',
-              borderRadius: '12px',
-              cursor: 'pointer'
-            }}
-          >
-            🏢 Играть за Компанию
-            <div style={{ fontSize: '14px', marginTop: '10px' }}>Вы + 3 бота-компании против 2 хакеров</div>
+          <button className="role-btn role-company" onClick={() => startNewGame('company')}>
+            🏢 Компания
+            <div className="role-desc">Вы + 3 бота против 2 хакеров</div>
           </button>
         </div>
-        
-        <div style={{
-          marginTop: '50px',
-          color: 'white',
-          textAlign: 'center',
-          backgroundColor: 'rgba(0,0,0,0.3)',
-          padding: '20px',
-          borderRadius: '12px',
-          maxWidth: '500px'
-        }}>
-          <h3>Как играть:</h3>
-          <p>• Выберите роль — остальные игроки будут ботами</p>
+        <div className="rules">
+          <h3>📖 Правила игры</h3>
           <p>• Хакеры атакуют компании, используя уязвимости</p>
           <p>• Компании защищают слабые характеристики</p>
-          <p>• При атаке на ВЫСОКУЮ характеристику хакер теряет 1 здоровье</p>
-          <p>• При двойной атаке первая характеристика имеет приоритет</p>
-          <p>• Компании могут бесплатно сбросить карты на ВЫСОКИЕ характеристики</p>
-          <p>• Временные защиты действуют до следующего хода компании</p>
+          <p>• Атака на HIGH характеристику стоит хакеру 1 HP</p>
+          <p>• Временные защиты действуют 1 ход</p>
+          <p>• Компании с HIGH характеристикой сбрасывают карты бесплатно</p>
+          <p>• Характеристики компаний скрыты до первой атаки или защиты</p>
         </div>
       </div>
     );
   }
 
-  // Экран окончания игры
+  // === ЭКРАН ОКОНЧАНИЯ ИГРЫ ===
   if (gameState?.gameOver) {
     return (
-      <div style={{ textAlign: 'center', padding: '50px' }}>
-        <h1>Игра окончена!</h1>
-        <h2 style={{ color: gameState.winner === 'hackers' ? '#ff4757' : '#2ed573' }}>
+      <div className="game-over">
+        <h1>🏁 Игра окончена!</h1>
+        <div className={`winner winner-${gameState.winner === 'hackers' ? 'hackers' : 'companies'}`}>
           {gameState.winner === 'hackers' ? '👾 Хакеры победили!' : '🏢 Компании победили!'}
-        </h2>
-        <button onClick={() => {
+        </div>
+        <button className="btn-new-game" onClick={() => {
           setRoleSelection(null);
           setGameState(null);
           setGameLog([]);
+          setSelectedAttackCard(null);
+          setSelectedCompany(null);
+          setSelectedDefenseCard(null);
+          setCurrentGameData({
+            damageDealt: 0,
+            damageTaken: 0,
+            cardsUsed: 0,
+            defensesUsed: 0,
+            rounds: 0
+          });
+          setIsGameFinished(false);
           processingRef.current = false;
           if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        }} style={{
-          padding: '15px 30px',
-          fontSize: '18px',
-          backgroundColor: '#3498db',
-          color: 'white',
-          border: 'none',
-          borderRadius: '8px',
-          cursor: 'pointer',
-          marginTop: '20px'
         }}>
-          Новая игра
+          🔄 Новая игра
         </button>
       </div>
     );
@@ -536,101 +737,100 @@ export function GameBoard() {
   const currentPlayer = getCurrentPlayer(gameState);
   const isHumanTurn = currentPlayer?.isHuman && !isProcessing && !gameState?.gameOver;
 
+  // === ОСНОВНОЙ ЭКРАН ИГРЫ ===
   return (
-    <div style={{ padding: '20px', maxWidth: '1400px', margin: '0 auto' }}>
-      {/* Верхняя панель */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '20px',
-        padding: '15px',
-        backgroundColor: '#2c3e50',
-        borderRadius: '12px',
-        color: 'white'
-      }}>
-        <div>🔁 РАУНД {gameState.currentTurn + 1}</div>
-        <div>
-          👤 Текущий игрок: {currentPlayer?.name || 'Неизвестно'}
-          {isProcessing && <span style={{ marginLeft: '10px', color: '#f39c12' }}>🤖 Ход бота...</span>}
-          {isHumanTurn && <span style={{ marginLeft: '10px', color: '#2ed573' }}>⭐ ВАШ ХОД!</span>}
+    <div className="container">
+      {/* ===== ВЕРХНЯЯ ПАНЕЛЬ ===== */}
+      <div className="top-panel">
+        <div className="top-panel-left">
+          <div className="round">🔁 РАУНД {gameState.currentTurn + 1}</div>
+          {user && <span className="user-name">👤 {user.displayName}</span>}
         </div>
-        {/* Кнопка "Завершить ход" теперь внизу */}
+        <div className="top-panel-center">
+          <div className="current-player">
+            👤 {currentPlayer?.name || 'Неизвестно'}
+            {isProcessing && <span className="bot-turn">🤖 Ход бота...</span>}
+            {isHumanTurn && <span className="human-turn">⭐ ВАШ ХОД!</span>}
+          </div>
+        </div>
+        <div className="top-panel-right">
+          {/* Кнопка профиля */}
+          <button className="top-btn profile-btn" onClick={onShowProfile} title="Профиль">
+            👤
+          </button>
+          <button className="top-btn stats-btn" onClick={() => setShowStats(true)} title="Статистика">
+            📊
+          </button>
+          <button className="top-btn history-btn" onClick={() => setShowHistory(true)} title="История">
+            📜
+          </button>
+          <button className="top-btn exit-btn" onClick={handleExitGame} title="Выйти из игры">
+            🚪
+          </button>
+          <button className="top-btn logout-btn" onClick={onLogout} title="Выйти из аккаунта">
+            🔓
+          </button>
+        </div>
       </div>
-      
-      {/* Сообщение */}
-      <div style={{
-        backgroundColor: '#e8f4f8',
-        padding: '10px',
-        borderRadius: '8px',
-        marginBottom: '20px',
-        textAlign: 'center'
-      }}>
+
+      {/* ===== СООБЩЕНИЕ ===== */}
+      <div className="message-bar">
         <strong>{message || (isHumanTurn ? '🎯 Ваш ход! Выберите действие' : (isProcessing ? '🤖 Ход бота...' : 'Ожидание...'))}</strong>
       </div>
-      
-      {/* Компании */}
-      <div style={{ marginBottom: '30px' }}>
-        <h2>🏢 КОМПАНИИ ({gameState.companies.length})</h2>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px' }}>
-          {gameState.companies.map(company => (
-            <div
-              key={company.id}
-              onClick={() => {
-                if (isHumanTurn && roleSelection === 'hacker') {
-                  setSelectedCompany(company);
-                }
-              }}
-              style={{
-                cursor: isHumanTurn && roleSelection === 'hacker' ? 'pointer' : 'default',
-                border: selectedCompany?.id === company.id ? '3px solid gold' : '1px solid #ddd',
-                borderRadius: '8px',
-                padding: '10px',
-                backgroundColor: 'white',
-                width: '280px'
-              }}
-            >
-              <Card card={company} type="company" />
-              <div style={{ marginTop: '8px', fontWeight: 'bold' }}>❤️ Здоровье: {company.health}</div>
-              
-              <div style={{ fontSize: '12px', marginTop: '8px', backgroundColor: '#f0f0f0', padding: '5px', borderRadius: '4px' }}>
-                <strong>🛡️ Защиты:</strong>
-                {company.permanentDefenses?.length > 0 && (
-                  <div><span style={{ color: '#27ae60' }}>Постоянные:</span> {company.permanentDefenses.map(d => d.name).join(', ')}</div>
-                )}
-                {company.temporaryDefenses?.length > 0 && (
-                  <div><span style={{ color: '#f39c12' }}>Временные:</span> {company.temporaryDefenses.map(d => d.name).join(', ')}</div>
-                )}
-                {(!company.permanentDefenses?.length && !company.temporaryDefenses?.length) && (
-                  <div style={{ color: '#999' }}>Нет активных защит</div>
-                )}
-              </div>
+
+      {/* ===== КОМПАНИИ ===== */}
+      <h2 style={{ color: 'white', marginBottom: '15px', textShadow: '0 2px 10px rgba(0,0,0,0.3)' }}>
+        🏢 КОМПАНИИ ({gameState.companies.length})
+      </h2>
+      <div className="companies-grid">
+        {gameState.companies.map(company => (
+          <div
+            key={company.id}
+            className={`company-card ${isHumanTurn && roleSelection === 'hacker' ? 'selectable' : ''} ${selectedCompany?.id === company.id ? 'selected' : ''}`}
+            onClick={() => {
+              if (isHumanTurn && roleSelection === 'hacker') {
+                setSelectedCompany(company);
+              }
+            }}
+          >
+            <Card card={company} type="company" />
+            <div className="company-health">
+              ❤️ Здоровье: <span className="health-bar">{company.health}</span>
             </div>
-          ))}
-        </div>
-      </div>
-      
-      {/* Хакеры */}
-      <div style={{ marginBottom: '30px' }}>
-        <h2>👾 ХАКЕРЫ ({gameState.hackers.length})</h2>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px' }}>
-          {gameState.hackers.map(hacker => (
-            <div key={hacker.id} style={{
-              border: currentPlayer?.id === hacker.id ? '3px solid gold' : '1px solid #ddd',
-              borderRadius: '8px',
-              padding: '10px',
-              backgroundColor: hacker.isHuman ? '#e8f8f5' : '#f5f5f5',
-              width: '200px'
-            }}>
-              <div style={{ fontWeight: 'bold' }}>{hacker.name} {hacker.isHuman && '(Вы)'}</div>
-              <div>❤️ Здоровье: {hacker.health}</div>
-              <div>📚 Карт: {hacker.hand?.length || 0}</div>
+            <div className="company-defenses">
+              <strong>🛡️ Защиты:</strong>
+              {company.permanentDefenses?.length > 0 && (
+                <div><span className="permanent">Постоянные:</span> {company.permanentDefenses.map(d => d.name).join(', ')}</div>
+              )}
+              {company.temporaryDefenses?.length > 0 && (
+                <div><span className="temporary">Временные:</span> {company.temporaryDefenses.map(d => d.name).join(', ')}</div>
+              )}
+              {(!company.permanentDefenses?.length && !company.temporaryDefenses?.length) && (
+                <div style={{ color: '#999' }}>Нет активных защит</div>
+              )}
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
-      
-      {/* Рука текущего игрока */}
+
+      {/* ===== ХАКЕРЫ ===== */}
+      <h2 style={{ color: 'white', marginBottom: '15px', textShadow: '0 2px 10px rgba(0,0,0,0.3)' }}>
+        👾 ХАКЕРЫ ({gameState.hackers.length})
+      </h2>
+      <div className="hackers-grid">
+        {gameState.hackers.map(hacker => (
+          <div
+            key={hacker.id}
+            className={`hacker-card ${currentPlayer?.id === hacker.id ? 'current' : ''} ${hacker.isHuman ? 'human' : ''}`}
+          >
+            <div className="hacker-name">{hacker.name} {hacker.isHuman && '(Вы)'}</div>
+            <div>❤️ Здоровье: {hacker.health}</div>
+            <div>📚 Карт: {hacker.hand?.length || 0}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ===== РУКА ИГРОКА ===== */}
       {isHumanTurn && (
         <>
           {roleSelection === 'hacker' && (
@@ -643,7 +843,7 @@ export function GameBoard() {
               onDiscard={handleDiscardCard}
             />
           )}
-          
+
           {roleSelection === 'company' && (
             <Hand
               cards={currentPlayer.hand}
@@ -655,197 +855,121 @@ export function GameBoard() {
               playerCharacteristics={currentPlayer.characteristics}
             />
           )}
-          
-          {/* Панель действий - теперь с кнопкой "Завершить ход" */}
-          <div style={{
-            position: 'fixed',
-            bottom: '20px',
-            right: '20px',
-            backgroundColor: 'white',
-            padding: '15px',
-            borderRadius: '12px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '10px',
-            zIndex: 100,
-            minWidth: '250px'
-          }}>
-            {/* Верхний ряд: основные действия */}
-            <div style={{ display: 'flex', gap: '10px' }}>
+
+          {/* ===== ПАНЕЛЬ ДЕЙСТВИЙ ===== */}
+          <div className="action-panel">
+            <div className="actions-row">
               {roleSelection === 'hacker' && (
                 <button
+                  className="btn-attack"
                   onClick={handleAttack}
                   disabled={!selectedAttackCard || !selectedCompany}
-                  style={{
-                    flex: 1,
-                    padding: '10px 20px',
-                    backgroundColor: '#e74c3c',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    opacity: (!selectedAttackCard || !selectedCompany) ? 0.5 : 1,
-                    fontSize: '14px',
-                    fontWeight: 'bold'
-                  }}
                 >
                   ⚔️ АТАКОВАТЬ
                 </button>
               )}
-              
+
               {roleSelection === 'company' && (
                 <button
+                  className="btn-defense"
                   onClick={handleUseDefense}
                   disabled={!selectedDefenseCard}
-                  style={{
-                    flex: 1,
-                    padding: '10px 20px',
-                    backgroundColor: '#27ae60',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    opacity: !selectedDefenseCard ? 0.5 : 1,
-                    fontSize: '14px',
-                    fontWeight: 'bold'
-                  }}
                 >
                   🛡️ ЗАЩИТИТЬ
                 </button>
               )}
-              
+
               <button
+                className="btn-clear"
                 onClick={() => {
                   setSelectedAttackCard(null);
                   setSelectedDefenseCard(null);
                   setSelectedCompany(null);
                   setMessage('Выбор очищен');
                 }}
-                style={{
-                  padding: '10px 20px',
-                  backgroundColor: '#95a5a6',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '14px'
-                }}
               >
                 🗑️ Очистить
               </button>
             </div>
-            
-            {/* Нижний ряд: кнопка завершения хода (полная ширина) */}
+
             <button
+              className="btn-end-turn"
               onClick={endTurn}
-              style={{
-                width: '100%',
-                padding: '12px 20px',
-                backgroundColor: '#f39c12',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '16px',
-                fontWeight: 'bold',
-                transition: 'all 0.2s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.backgroundColor = '#e67e22';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.backgroundColor = '#f39c12';
-              }}
             >
               ⏭️ ЗАВЕРШИТЬ ХОД
             </button>
           </div>
         </>
       )}
-      
-      {/* Индикатор хода бота */}
+
+      {/* ===== ИНДИКАТОР ХОДА БОТА ===== */}
       {isProcessing && (
         <div style={{
           marginTop: '20px',
           padding: '15px',
-          backgroundColor: '#f8f9fa',
+          backgroundColor: 'rgba(255,255,255,0.9)',
           borderRadius: '12px',
-          textAlign: 'center'
+          textAlign: 'center',
+          border: '2px solid #6fbda8'
         }}>
           <p>🤖 <strong>{currentPlayer?.name}</strong> выполняет ход...</p>
           <div style={{ fontSize: '12px', color: '#666' }}>Пожалуйста, подождите</div>
         </div>
       )}
-      
-      {/* Лог игры */}
-      <div style={{
-        marginTop: '30px',
-        padding: '15px',
-        backgroundColor: '#1a1a2e',
-        borderRadius: '8px',
-        maxHeight: '200px',
-        overflowY: 'auto',
-        color: '#eee',
-        fontFamily: 'monospace'
-      }}>
-        <h3 style={{ color: '#fff', marginBottom: '10px' }}>📜 ЛОГ ИГРЫ</h3>
+
+      {/* ===== ЛОГ ИГРЫ ===== */}
+      <div className="log-container">
+        <div className="log-title">📜 ЛОГ ИГРЫ</div>
         {gameLog.map((log, idx) => (
-          <div key={idx} style={{ fontSize: '11px', marginBottom: '5px', fontFamily: 'monospace' }}>{log}</div>
+          <div key={idx} className="log-entry">
+            <span className="time">[{new Date().toLocaleTimeString()}]</span> {log}
+          </div>
         ))}
       </div>
-      
-      {/* Модальное окно для выбора характеристики */}
+
+      {/* ===== МОДАЛЬНОЕ ОКНО ДЛЯ ВЫБОРА ХАРАКТЕРИСТИКИ ===== */}
       {choosingCharacteristic && (
-        <div style={{
-          position: 'fixed',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          backgroundColor: 'white',
-          padding: '20px',
-          borderRadius: '12px',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-          zIndex: 1000,
-          minWidth: '250px'
-        }}>
-          <h3 style={{ marginBottom: '15px' }}>Выберите характеристику</h3>
-          {Object.entries(characteristicNames).map(([key, name]) => (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3>Выберите характеристику для атаки</h3>
+            {Object.entries(characteristicNames).map(([key, name]) => (
+              <button
+                key={key}
+                className="modal-btn"
+                onClick={() => handleAttackWithChar(key)}
+              >
+                {characteristicIcons[key] || '📊'} {name}
+              </button>
+            ))}
             <button
-              key={key}
-              onClick={() => handleAttackWithChar(key)}
-              style={{
-                display: 'block',
-                width: '100%',
-                margin: '8px 0',
-                padding: '10px',
-                backgroundColor: '#3498db',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer'
-              }}
+              className="modal-btn modal-btn-cancel"
+              onClick={() => setChoosingCharacteristic(null)}
             >
-              {name}
+              Отмена
             </button>
-          ))}
-          <button
-            onClick={() => setChoosingCharacteristic(null)}
-            style={{
-              display: 'block',
-              width: '100%',
-              margin: '8px 0',
-              padding: '10px',
-              backgroundColor: '#95a5a6',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer'
-            }}
-          >
-            Отмена
-          </button>
+          </div>
         </div>
+      )}
+
+      {/* ===== МОДАЛЬНОЕ ОКНО СТАТИСТИКИ ===== */}
+      {showStats && (
+        <Stats
+          stats={stats}
+          onClose={() => setShowStats(false)}
+          onClear={() => {
+            if (window.confirm('Вы уверены, что хотите очистить всю статистику?')) {
+              clearStats();
+            }
+          }}
+        />
+      )}
+
+      {/* ===== МОДАЛЬНОЕ ОКНО ИСТОРИИ ===== */}
+      {showHistory && (
+        <History
+          history={stats.history}
+          onClose={() => setShowHistory(false)}
+        />
       )}
     </div>
   );

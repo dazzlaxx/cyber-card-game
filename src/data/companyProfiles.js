@@ -1,28 +1,26 @@
+// ПРОФИЛИ КОМПАНИЙ (20 уникальных комбинаций)
+
 import { characteristicKeys } from './characteristics';
-// ВСЕ ГОТОВО, НЕ ТРОГАТЬ
-// 20 различных профилей компаний. 
-const companyTemplates = [
-  { informationSecurity: 'low', technologyInfrastructure: 'low', financialStability: 'low', innovationAbility: 'high', reputation: 'high' },
-  { informationSecurity: 'low', technologyInfrastructure: 'low', financialStability: 'high', innovationAbility: 'low', reputation: 'high' },
-  { informationSecurity: 'low', technologyInfrastructure: 'high', financialStability: 'low', innovationAbility: 'low', reputation: 'high' },
-  { informationSecurity: 'high', technologyInfrastructure: 'low', financialStability: 'low', innovationAbility: 'low', reputation: 'high' },
-  { informationSecurity: 'low', technologyInfrastructure: 'low', financialStability: 'high', innovationAbility: 'high', reputation: 'low' },
-  { informationSecurity: 'low', technologyInfrastructure: 'high', financialStability: 'low', innovationAbility: 'high', reputation: 'low' },
-  { informationSecurity: 'high', technologyInfrastructure: 'low', financialStability: 'low', innovationAbility: 'high', reputation: 'low' },
-  { informationSecurity: 'low', technologyInfrastructure: 'high', financialStability: 'high', innovationAbility: 'low', reputation: 'low' },
-  { informationSecurity: 'high', technologyInfrastructure: 'low', financialStability: 'high', innovationAbility: 'low', reputation: 'low' },
-  { informationSecurity: 'high', technologyInfrastructure: 'high', financialStability: 'low', innovationAbility: 'low', reputation: 'low' },
-  { informationSecurity: 'high', technologyInfrastructure: 'high', financialStability: 'high', innovationAbility: 'low', reputation: 'low' },
-  { informationSecurity: 'high', technologyInfrastructure: 'high', financialStability: 'low', innovationAbility: 'high', reputation: 'low' },
-  { informationSecurity: 'high', technologyInfrastructure: 'low', financialStability: 'high', innovationAbility: 'high', reputation: 'low' },
-  { informationSecurity: 'low', technologyInfrastructure: 'high', financialStability: 'high', innovationAbility: 'high', reputation: 'low' },
-  { informationSecurity: 'high', technologyInfrastructure: 'high', financialStability: 'low', innovationAbility: 'low', reputation: 'high' },
-  { informationSecurity: 'high', technologyInfrastructure: 'low', financialStability: 'high', innovationAbility: 'low', reputation: 'high' },
-  { informationSecurity: 'low', technologyInfrastructure: 'high', financialStability: 'high', innovationAbility: 'low', reputation: 'high' },
-  { informationSecurity: 'high', technologyInfrastructure: 'low', financialStability: 'low', innovationAbility: 'high', reputation: 'high' },
-  { informationSecurity: 'low', technologyInfrastructure: 'high', financialStability: 'low', innovationAbility: 'high', reputation: 'high' },
-  { informationSecurity: 'low', technologyInfrastructure: 'low', financialStability: 'high', innovationAbility: 'high', reputation: 'high' }
-];
+
+function generateAllCombinations() {
+  const combinations = [];
+  const keys = characteristicKeys;
+
+  for (let i = 0; i < keys.length; i++) {
+    for (let j = i + 1; j < keys.length; j++) {
+      const profile = {};
+      keys.forEach(key => {
+        profile[key] = (key === keys[i] || key === keys[j]) ? 'high' : 'low';
+      });
+      combinations.push(profile);
+    }
+  }
+
+  return combinations;
+}
+
+const uniqueCombinations = generateAllCombinations();
+const companyTemplates = [...uniqueCombinations, ...uniqueCombinations];
 
 const companyNames = [
   'ТехноГлобал', 'АльфаТех', 'БезопасныйМир', 'ИнновацияЛаб',
@@ -38,10 +36,13 @@ export function generateCompanies(count) {
     const j = Math.floor(Math.random() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
-  
-  return shuffled.slice(0, count).map((profile, index) => ({
-    id: `company_${index + 1}`,
-    name: companyNames[index % companyNames.length] + ` ${index + 1}`,
-    characteristics: { ...profile }
-  }));
+
+  return shuffled.slice(0, count).map((profile, index) => {
+    const nameIndex = index % companyNames.length;
+    return {
+      id: `company_${index + 1}`,
+      name: companyNames[nameIndex] + ` ${index + 1}`,
+      characteristics: { ...profile }
+    };
+  });
 }

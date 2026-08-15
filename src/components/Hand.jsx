@@ -9,15 +9,12 @@ export function Hand({ cards, type, onCardClick, selectedCardId, title, onDiscar
   };
 
   return (
-    <div style={{
-      margin: '20px 0',
-      padding: '15px',
-      backgroundColor: '#f8f9fa',
-      borderRadius: '12px',
-      border: '2px solid #dee2e6'
-    }}>
-      <h3 style={{ margin: '0 0 15px 0', color: '#495057' }}>{title} ({cards.length})</h3>
-      
+    <div className="hand-container">
+      <div className="hand-title">
+        {title}
+        <span className="count">{cards.length}</span>
+      </div>
+
       <div style={{
         display: 'flex',
         flexWrap: 'wrap',
@@ -28,7 +25,7 @@ export function Hand({ cards, type, onCardClick, selectedCardId, title, onDiscar
       }}>
         {cards.map(card => {
           const freeDiscard = isFreeDiscard(card);
-          
+
           return (
             <div key={card.id} style={{ position: 'relative' }}>
               <Card
@@ -37,7 +34,7 @@ export function Hand({ cards, type, onCardClick, selectedCardId, title, onDiscar
                 onClick={() => onCardClick(card)}
                 isSelected={selectedCardId === card.id}
               />
-              
+
               {onDiscard && (
                 <button
                   onClick={(e) => {
@@ -65,7 +62,7 @@ export function Hand({ cards, type, onCardClick, selectedCardId, title, onDiscar
                   ✕
                 </button>
               )}
-              
+
               {freeDiscard && (
                 <div style={{
                   position: 'absolute',
@@ -85,7 +82,7 @@ export function Hand({ cards, type, onCardClick, selectedCardId, title, onDiscar
             </div>
           );
         })}
-        
+
         {cards.length === 0 && (
           <p style={{ color: '#868e96', fontStyle: 'italic' }}>Нет карт</p>
         )}

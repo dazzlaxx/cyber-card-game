@@ -1,3 +1,5 @@
+// УТИЛИТА ДЛЯ ПЕРЕМЕШИВАНИЯ МАССИВОВ
+
 export function shuffleArray(array) {
   const newArray = [...array];
   for (let i = newArray.length - 1; i > 0; i--) {
