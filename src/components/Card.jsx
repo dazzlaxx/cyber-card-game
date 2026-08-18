@@ -1,4 +1,6 @@
+// ============================================================
 // КОМПОНЕНТ КАРТЫ
+// ============================================================
 
 import React from 'react';
 import { characteristicNames, characteristicIcons } from '../data/characteristics';
@@ -13,16 +15,26 @@ export function Card({ card, type, onClick, isSelected }) {
     return '#dfe6e9';
   };
 
-  // Проверяем, нужно ли скрывать характеристики
-  const shouldHideCharacteristics = () => {
-    if (type !== 'company') return false;
-    // Если это компания игрока - показываем всё
-    if (card.isHuman) return false;
-    // Если есть флаг скрытия - скрываем
-    return card.hideCharacteristics === true;
+  // Функция для перевода значения характеристики на русский
+  const getCharacteristicValue = (value) => {
+    if (value === 'high') return '⬆️ Высокая';
+    if (value === 'low') return '⬇️ Низкая';
+    return value;
   };
 
-  const hideChars = shouldHideCharacteristics();
+  // Функция для получения цвета значения характеристики
+  const getCharacteristicColor = (value) => {
+    if (value === 'high') return '#27ae60';
+    if (value === 'low') return '#e74c3c';
+    return '#95a5a6';
+  };
+
+  // Функция для получения фона значения характеристики
+  const getCharacteristicBg = (value) => {
+    if (value === 'high') return '#e8f5e9';
+    if (value === 'low') return '#ffebee';
+    return '#f5f5f5';
+  };
 
   return (
     <div
@@ -71,10 +83,11 @@ export function Card({ card, type, onClick, isSelected }) {
         <div style={{ fontSize: '11px', marginTop: '8px' }}>
           {Object.entries(card.characteristics).map(([key, value]) => {
             // Проверяем, раскрыта ли характеристика
-            const isRevealed = card.revealedCharacteristics?.includes(key) || false;
+            const isRevealed = !card.hideCharacteristics ||
+                              (card.revealedCharacteristics && card.revealedCharacteristics.includes(key));
 
             // Если характеристики скрыты И характеристика не раскрыта
-            if (hideChars && !isRevealed) {
+            if (card.hideCharacteristics && !isRevealed) {
               return (
                 <div key={key} style={{
                   display: 'flex',
@@ -89,23 +102,23 @@ export function Card({ card, type, onClick, isSelected }) {
               );
             }
 
-            // Показываем раскрытую характеристику
+            // Показываем раскрытую характеристику на РУССКОМ
             return (
               <div key={key} style={{ 
                 display: 'flex', 
                 justifyContent: 'space-between', 
                 marginBottom: '3px',
-                animation: isRevealed && hideChars ? 'fadeIn 0.5s ease' : 'none'
+                animation: card.hideCharacteristics && isRevealed ? 'fadeIn 0.5s ease' : 'none'
               }}>
                 <span>{characteristicIcons[key] || '📊'} {characteristicNames[key]}:</span>
                 <span style={{
-                  color: value === 'high' ? '#27ae60' : '#e74c3c',
+                  color: getCharacteristicColor(value),
                   fontWeight: 'bold',
-                  backgroundColor: value === 'high' ? '#e8f5e9' : '#ffebee',
+                  backgroundColor: getCharacteristicBg(value),
                   padding: '0 6px',
                   borderRadius: '4px'
                 }}>
-                  {value === 'high' ? '⬆️ Высокая' : '⬇️ Низкая'}
+                  {getCharacteristicValue(value)}
                 </span>
               </div>
             );

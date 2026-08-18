@@ -1,17 +1,23 @@
+// ============================================================
 // КОМПОНЕНТ СТАТИСТИКИ ИГРОКА
+// ============================================================
 
-import React from 'react';
+import React, { useEffect } from 'react';
 
-export function Stats({ stats, onClose, onClear }) {
+export function Stats({ stats, onClose, onClear, theme }) {
+  // Синхронизация темы
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
   const winRate = stats.totalGames === 0 ? 0 : Math.round((stats.wins / stats.totalGames) * 100);
   const hackerWinRate = stats.asHacker.games === 0 ? 0 : Math.round((stats.asHacker.wins / stats.asHacker.games) * 100);
   const companyWinRate = stats.asCompany.games === 0 ? 0 : Math.round((stats.asCompany.wins / stats.asCompany.games) * 100);
 
   return (
-    <div className="stats-overlay" style={{ zIndex: 2000 }}>
+    <div className="stats-overlay" data-theme={theme} style={{ zIndex: 4000 }}>
       <div className="stats-box">
         <div className="stats-header">
-          <h2>📊 Статистика игрока</h2>
+          <h2>📊 Полная статистика</h2>
           <button className="stats-close" onClick={onClose}>✕</button>
         </div>
 

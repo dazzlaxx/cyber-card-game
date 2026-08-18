@@ -1,7 +1,14 @@
+// ============================================================
 // КОМПОНЕНТ ИСТОРИИ ИГР
-import React from 'react';
+// ============================================================
 
-export function History({ history, onClose }) {
+import React, { useEffect } from 'react';
+
+export function History({ history, onClose, theme }) {
+  // Синхронизация темы
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
   const formatDate = (dateString) => {
     if (!dateString) return 'Неизвестно';
     try {
@@ -20,7 +27,7 @@ export function History({ history, onClose }) {
   };
 
   return (
-    <div className="history-overlay" style={{ zIndex: 2000 }}>
+    <div className="history-overlay" data-theme={theme} style={{ zIndex: 4000 }}>
       <div className="history-box">
         <div className="history-header">
           <h2>📜 История игр</h2>
@@ -30,7 +37,7 @@ export function History({ history, onClose }) {
         {history.length === 0 ? (
           <div className="history-empty">
             <p>😴 Вы ещё не сыграли ни одной игры</p>
-            <p style={{ fontSize: '14px', color: '#95a5a6', marginTop: '8px' }}>
+            <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginTop: '8px' }}>
               Начните играть, чтобы заполнить историю!
             </p>
           </div>

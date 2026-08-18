@@ -1,4 +1,6 @@
+// ============================================================
 // ГЛАВНЫЙ КОМПОНЕНТ ПРИЛОЖЕНИЯ
+// ============================================================
 
 import React, { useState, useEffect } from 'react';
 import { GameBoard } from './components/GameBoard';
@@ -8,14 +10,26 @@ import { useGameStats } from './hooks/useGameStats';
 import './styles/app.css';
 
 const CURRENT_USER_KEY = 'cyberGameCurrentUser';
+const THEME_KEY = 'cyberGameTheme';
 
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showProfile, setShowProfile] = useState(false);
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem(THEME_KEY);
+    return saved || 'light';
+  });
   const { stats, clearStats } = useGameStats();
 
-  // Проверяем, есть ли сохранённый пользователь
+  // Применяем тему при загрузке и при изменении
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem(THEME_KEY, theme);
+    // Принудительно обновляем все компоненты, использующие тему
+    window.dispatchEvent(new CustomEvent('themeChanged', { detail: { theme } }));
+  }, [theme]);
+
   useEffect(() => {
     const savedUser = localStorage.getItem(CURRENT_USER_KEY);
     if (savedUser) {
@@ -28,6 +42,17 @@ function App() {
     setLoading(false);
   }, []);
 
+  // Слушаем события смены темы из других компонентов
+  useEffect(() => {
+    const handleThemeChange = (e) => {
+      if (e.detail && e.detail.theme) {
+        setTheme(e.detail.theme);
+      }
+    };
+    window.addEventListener('themeChanged', handleThemeChange);
+    return () => window.removeEventListener('themeChanged', handleThemeChange);
+  }, []);
+
   const handleLogin = (userData) => {
     setUser(userData);
   };
@@ -36,6 +61,13 @@ function App() {
     localStorage.removeItem(CURRENT_USER_KEY);
     setUser(null);
     setShowProfile(false);
+  };
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    // Отправляем событие для синхронизации
+    window.dispatchEvent(new CustomEvent('themeChanged', { detail: { theme: newTheme } }));
   };
 
   if (loading) {
@@ -47,12 +79,21 @@ function App() {
   }
 
   if (!user) {
-    return <Auth onLogin={handleLogin} />;
+    return <Auth onLogin={handleLogin} theme={theme} />;
   }
 
   return (
-    <div className="App">
-      {/* Кнопка профиля - всегда видна в правом верхнем углу */}
+    <div className="App" data-theme={theme}>
+      {/* ===== КНОПКА ТЕМЫ (левый верхний угол) ===== */}
+      <button 
+        className="theme-toggle-left"
+        onClick={toggleTheme}
+        title={theme === 'light' ? '🌙 Тёмная тема' : '☀️ Светлая тема'}
+      >
+        {theme === 'light' ? '🌙' : '☀️'}
+      </button>
+
+      {/* ===== КНОПКА ПРОФИЛЯ (правый верхний угол) ===== */}
       <button 
         className="profile-trigger"
         onClick={() => setShowProfile(true)}
@@ -65,9 +106,10 @@ function App() {
         user={user} 
         onLogout={handleLogout}
         onShowProfile={() => setShowProfile(true)}
+        theme={theme}
+        toggleTheme={toggleTheme}
       />
 
-      {/* Модальное окно профиля */}
       {showProfile && (
         <Profile
           user={user}
@@ -75,6 +117,7 @@ function App() {
           onClose={() => setShowProfile(false)}
           onLogout={handleLogout}
           clearStats={clearStats}
+          theme={theme}
         />
       )}
     </div>

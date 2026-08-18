@@ -1,34 +1,53 @@
+// ============================================================
 // КОМПОНЕНТ АВТОРИЗАЦИИ
+// ============================================================
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const USERS_KEY = 'cyberGameUsers';
 const CURRENT_USER_KEY = 'cyberGameCurrentUser';
+const THEME_KEY = 'cyberGameTheme';
 
-// Загрузка списка пользователей
+// Демо-аккаунт
+const DEMO_USER = {
+  username: 'guest',
+  displayName: 'Гость',
+  password: 'guest',
+  createdAt: new Date().toISOString()
+};
+
 const loadUsers = () => {
   const saved = localStorage.getItem(USERS_KEY);
   if (saved) {
     try {
-      return JSON.parse(saved);
+      const users = JSON.parse(saved);
+      if (!users['guest']) {
+        users['guest'] = DEMO_USER;
+        localStorage.setItem(USERS_KEY, JSON.stringify(users));
+      }
+      return users;
     } catch {
-      return {};
+      return { guest: DEMO_USER };
     }
   }
-  return {};
+  return { guest: DEMO_USER };
 };
 
-// Сохранение пользователей
 const saveUsers = (users) => {
   localStorage.setItem(USERS_KEY, JSON.stringify(users));
 };
 
-export function Auth({ onLogin }) {
+export function Auth({ onLogin, theme }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isRegister, setIsRegister] = useState(false);
   const [error, setError] = useState('');
   const [users, setUsers] = useState(loadUsers);
+
+  // Синхронизация темы при монтировании
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -42,7 +61,6 @@ export function Auth({ onLogin }) {
     const trimmedUsername = username.trim().toLowerCase();
 
     if (isRegister) {
-      // ===== РЕГИСТРАЦИЯ =====
       if (users[trimmedUsername]) {
         setError('Пользователь с таким именем уже существует');
         return;
@@ -66,7 +84,6 @@ export function Auth({ onLogin }) {
       saveUsers(newUsers);
       setUsers(newUsers);
 
-      // Автоматический вход после регистрации
       const userData = {
         username: trimmedUsername,
         displayName: username.trim(),
@@ -76,7 +93,6 @@ export function Auth({ onLogin }) {
       onLogin(userData);
 
     } else {
-      // ===== ВХОД =====
       const user = users[trimmedUsername];
       if (!user) {
         setError('Пользователь не найден');
@@ -97,8 +113,26 @@ export function Auth({ onLogin }) {
     }
   };
 
+  // Функция для переключения темы
+  const handleToggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem(THEME_KEY, newTheme);
+    // Отправляем событие для синхронизации с App
+    window.dispatchEvent(new CustomEvent('themeChanged', { detail: { theme: newTheme } }));
+  };
+
   return (
-    <div className="auth-container">
+    <div className="auth-container" data-theme={theme}>
+      {/* Кнопка темы на экране авторизации */}
+      <button 
+        className="theme-toggle-auth"
+        onClick={handleToggleTheme}
+        title={theme === 'light' ? '🌙 Тёмная тема' : '☀️ Светлая тема'}
+      >
+        {theme === 'light' ? '🌙' : '☀️'}
+      </button>
+
       <div className="auth-box">
         <div className="auth-logo">🛡️</div>
         <h1>Cyber Conflict</h1>

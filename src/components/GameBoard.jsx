@@ -1,4 +1,6 @@
+// ============================================================
 // ГЛАВНЫЙ КОМПОНЕНТ ИГРЫ
+// ============================================================
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Hand } from './Hand';
@@ -96,7 +98,7 @@ const deepCopyGameState = (state) => {
 // ============================================================
 // ОСНОВНОЙ КОМПОНЕНТ
 // ============================================================
-export function GameBoard({ user, onLogout, onShowProfile }) {
+export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme }) {
   // ===== СОСТОЯНИЯ ИГРЫ =====
   const [gameState, setGameState] = useState(null);
   const [selectedAttackCard, setSelectedAttackCard] = useState(null);
@@ -106,9 +108,35 @@ export function GameBoard({ user, onLogout, onShowProfile }) {
   const [gameLog, setGameLog] = useState([]);
   const [choosingCharacteristic, setChoosingCharacteristic] = useState(null);
   const [roleSelection, setRoleSelection] = useState(null);
+  const [gameMode, setGameMode] = useState('normal');
   const [isProcessing, setIsProcessing] = useState(false);
   const processingRef = useRef(false);
   const timeoutRef = useRef(null);
+
+// Синхронизация темы при монтировании и изменении
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('cyberGameTheme', theme);
+  }, [theme]);
+
+  // Слушаем события смены темы из других компонентов
+  useEffect(() => {
+    const handleThemeChange = (e) => {
+      if (e.detail && e.detail.theme) {
+        // Обновляем тему через пропс
+        if (toggleTheme) {
+          // Принудительно обновляем, если тема отличается
+          const currentTheme = document.documentElement.getAttribute('data-theme');
+          if (currentTheme !== e.detail.theme) {
+            document.documentElement.setAttribute('data-theme', e.detail.theme);
+            localStorage.setItem('cyberGameTheme', e.detail.theme);
+          }
+        }
+      }
+    };
+    window.addEventListener('themeChanged', handleThemeChange);
+    return () => window.removeEventListener('themeChanged', handleThemeChange);
+  }, [toggleTheme]);
 
   // ===== СОСТОЯНИЯ СТАТИСТИКИ =====
   const { stats, addGame, clearStats } = useGameStats();
@@ -170,9 +198,7 @@ export function GameBoard({ user, onLogout, onShowProfile }) {
       return;
     }
 
-    // Спрашиваем подтверждение
     if (window.confirm('Вы уверены, что хотите выйти из игры? Прогресс будет потерян.')) {
-      // Добавляем игру как поражение
       addGame({
         role: roleSelection,
         won: false,
@@ -181,7 +207,8 @@ export function GameBoard({ user, onLogout, onShowProfile }) {
         cardsUsed: currentGameData.cardsUsed,
         defensesUsed: currentGameData.defensesUsed,
         rounds: gameState.currentTurn + 1,
-        opponent: 'Боты'
+        opponent: 'Боты',
+        mode: gameMode
       });
 
       setRoleSelection(null);
@@ -223,7 +250,8 @@ export function GameBoard({ user, onLogout, onShowProfile }) {
           cardsUsed: currentGameData.cardsUsed,
           defensesUsed: currentGameData.defensesUsed,
           rounds: newState.currentTurn + 1,
-          opponent: 'Боты'
+          opponent: 'Боты',
+          mode: gameMode
         });
         setIsGameFinished(true);
       } else if (roleSelection === 'company' && !newState.gameOverAdded) {
@@ -236,7 +264,8 @@ export function GameBoard({ user, onLogout, onShowProfile }) {
           cardsUsed: currentGameData.cardsUsed,
           defensesUsed: currentGameData.defensesUsed,
           rounds: newState.currentTurn + 1,
-          opponent: 'Боты'
+          opponent: 'Боты',
+          mode: gameMode
         });
         setIsGameFinished(true);
       }
@@ -256,7 +285,8 @@ export function GameBoard({ user, onLogout, onShowProfile }) {
           cardsUsed: currentGameData.cardsUsed,
           defensesUsed: currentGameData.defensesUsed,
           rounds: newState.currentTurn + 1,
-          opponent: 'Боты'
+          opponent: 'Боты',
+          mode: gameMode
         });
         setIsGameFinished(true);
       } else if (roleSelection === 'company' && !newState.gameOverAdded) {
@@ -269,14 +299,15 @@ export function GameBoard({ user, onLogout, onShowProfile }) {
           cardsUsed: currentGameData.cardsUsed,
           defensesUsed: currentGameData.defensesUsed,
           rounds: newState.currentTurn + 1,
-          opponent: 'Боты'
+          opponent: 'Боты',
+          mode: gameMode
         });
         setIsGameFinished(true);
       }
     }
 
     return newState;
-  }, [addLogMessage, roleSelection, addGame, currentGameData]);
+  }, [addLogMessage, roleSelection, addGame, currentGameData, gameMode]);
 
   // ============================================================
   // ВЫПОЛНЕНИЕ ХОДА БОТА
@@ -448,8 +479,8 @@ export function GameBoard({ user, onLogout, onShowProfile }) {
   // ОБРАБОТЧИКИ ДЕЙСТВИЙ
   // ============================================================
 
-  const startNewGame = (role) => {
-    const newGame = initializeGameWithBots(role, 4, 2);
+  const startNewGame = (role, mode = 'normal') => {
+    const newGame = initializeGameWithBots(role, 4, 2, mode);
 
     // Скрываем характеристики компаний для хакера
     if (role === 'hacker') {
@@ -475,11 +506,12 @@ export function GameBoard({ user, onLogout, onShowProfile }) {
 
     setGameState(newGame);
     setRoleSelection(role);
+    setGameMode(mode);
     setSelectedAttackCard(null);
     setSelectedCompany(null);
     setSelectedDefenseCard(null);
-    setMessage(`Игра началась! Вы играете за ${role === 'hacker' ? 'Хакера' : 'Компанию'}`);
-    addLogMessage(`Игра началась! Роль: ${role === 'hacker' ? 'Хакер' : 'Компания'}`);
+    setMessage(`Игра началась! Вы играете за ${role === 'hacker' ? 'Хакера' : 'Компанию'} (${mode === 'fast' ? 'Быстрый режим' : 'Обычный режим'})`);
+    addLogMessage(`Игра началась! Роль: ${role === 'hacker' ? 'Хакер' : 'Компания'}, Режим: ${mode === 'fast' ? 'Быстрый' : 'Обычный'}`);
     addLogMessage(`--- РАУНД 1 ---`);
   };
 
@@ -676,27 +708,109 @@ export function GameBoard({ user, onLogout, onShowProfile }) {
   // === ЭКРАН ВЫБОРА РОЛИ ===
   if (!roleSelection) {
     return (
-      <div className="role-select">
+      <div className="role-select" data-theme={theme}>
         <h1>🛡️ Cyber Conflict</h1>
         <p className="subtitle">Выберите сторону в кибервойне</p>
-        <div className="roles">
-          <button className="role-btn role-hacker" onClick={() => startNewGame('hacker')}>
-            🕵️ Хакер
-            <div className="role-desc">Вы + 1 бот против 4 компаний</div>
-          </button>
-          <button className="role-btn role-company" onClick={() => startNewGame('company')}>
-            🏢 Компания
-            <div className="role-desc">Вы + 3 бота против 2 хакеров</div>
-          </button>
+
+        <div className="role-select-container">
+          {/* ===== КАРТОЧКА ХАКЕРА ===== */}
+          <div className="role-card-wrapper">
+            <div className="role-card role-hacker-card">
+              <div className="role-card-header">🕵️</div>
+              <h2>Хакер</h2>
+              <p className="role-desc">Вы + 1 бот против 4 компаний</p>
+              <div className="role-rules">
+                <strong>Ваши задачи:</strong>
+                <ul>
+                  <li>Атакуйте компании, находя их слабые места</li>
+                  <li>Используйте карты атаки для нанесения урона</li>
+                  <li>Доведите здоровье всех компаний до 0</li>
+                  <li>Атака на ВЫСОКУЮ характеристику стоит вам 1 HP</li>
+                </ul>
+              </div>
+              <div className="role-modes">
+                <button 
+                  className="mode-btn mode-normal" 
+                  onClick={() => startNewGame('hacker', 'normal')}
+                >
+                  ⚡ Обычный режим
+                </button>
+                <button 
+                  className="mode-btn mode-fast" 
+                  onClick={() => startNewGame('hacker', 'fast')}
+                >
+                  🚀 Быстрый режим
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ===== КАРТОЧКА КОМПАНИИ ===== */}
+          <div className="role-card-wrapper">
+            <div className="role-card role-company-card">
+              <div className="role-card-header">🏢</div>
+              <h2>Компания</h2>
+              <p className="role-desc">Вы + 3 бота против 2 хакеров</p>
+              <div className="role-rules">
+                <strong>Ваши задачи:</strong>
+                <ul>
+                  <li>Защищайте свои слабые характеристики</li>
+                  <li>Используйте карты защиты для укрепления</li>
+                  <li>Не дайте хакерам снизить ваше здоровье до 0</li>
+                  <li>Сбрасывайте карты на ВЫСОКИХ характеристиках бесплатно</li>
+                </ul>
+              </div>
+              <div className="role-modes">
+                <button 
+                  className="mode-btn mode-normal" 
+                  onClick={() => startNewGame('company', 'normal')}
+                >
+                  ⚡ Обычный режим
+                </button>
+                <button 
+                  className="mode-btn mode-fast" 
+                  onClick={() => startNewGame('company', 'fast')}
+                >
+                  🚀 Быстрый режим
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="rules">
+
+        {/* ===== ОБЩИЕ ПРАВИЛА ===== */}
+        <div className="rules-section">
           <h3>📖 Правила игры</h3>
-          <p>• Хакеры атакуют компании, используя уязвимости</p>
-          <p>• Компании защищают слабые характеристики</p>
-          <p>• Атака на HIGH характеристику стоит хакеру 1 HP</p>
-          <p>• Временные защиты действуют 1 ход</p>
-          <p>• Компании с HIGH характеристикой сбрасывают карты бесплатно</p>
-          <p>• Характеристики компаний скрыты до первой атаки или защиты</p>
+          <div className="rules-grid">
+            <div className="rules-column">
+              <h4>🎯 Цель игры</h4>
+              <p><strong>Хакеры</strong> — уничтожить все компании, снизив их здоровье до 0</p>
+              <p><strong>Компании</strong> — защититься и не дать хакерам победить</p>
+            </div>
+            <div className="rules-column">
+              <h4>⚔️ Атака</h4>
+              <p>• Атака на <strong>НИЗКУЮ</strong> характеристику — ✅ Успех (урон 1-2)</p>
+              <p>• Атака на <strong>ВЫСОКУЮ</strong> характеристику — ❌ Провал (хакер теряет 1 HP)</p>
+              <p>• Атака на <strong>защищённую</strong> характеристику — ❌ Провал (защита снимается)</p>
+            </div>
+            <div className="rules-column">
+              <h4>🛡️ Защита</h4>
+              <p>• <strong>Временная</strong> защита — действует 1 ход</p>
+              <p>• <strong>Постоянная</strong> защита — действует до первой атаки</p>
+              <p>• Компании с <strong>ВЫСОКОЙ</strong> характеристикой сбрасывают карты <strong>бесплатно</strong></p>
+            </div>
+            <div className="rules-column">
+              <h4>🔍 Скрытые характеристики</h4>
+              <p>• Для хакера характеристики компаний <strong>скрыты</strong> 🔒</p>
+              <p>• При атаке или защите характеристика <strong>раскрывается</strong></p>
+              <p>• Боты видят все характеристики (для баланса)</p>
+            </div>
+          </div>
+          <div className="rules-modes">
+            <h4>🎮 Режимы игры</h4>
+            <p><strong>⚡ Обычный режим</strong> — полная игра с 10 HP у всех и 3 картами в руке</p>
+            <p><strong>🚀 Быстрый режим</strong> — ускоренная игра с 6 HP и 2 картами в руке</p>
+          </div>
         </div>
       </div>
     );
@@ -705,10 +819,13 @@ export function GameBoard({ user, onLogout, onShowProfile }) {
   // === ЭКРАН ОКОНЧАНИЯ ИГРЫ ===
   if (gameState?.gameOver) {
     return (
-      <div className="game-over">
+      <div className="game-over" data-theme={theme}>
         <h1>🏁 Игра окончена!</h1>
         <div className={`winner winner-${gameState.winner === 'hackers' ? 'hackers' : 'companies'}`}>
           {gameState.winner === 'hackers' ? '👾 Хакеры победили!' : '🏢 Компании победили!'}
+        </div>
+        <div className="game-mode-info">
+          Режим: {gameMode === 'fast' ? '🚀 Быстрый' : '⚡ Обычный'}
         </div>
         <button className="btn-new-game" onClick={() => {
           setRoleSelection(null);
@@ -739,11 +856,12 @@ export function GameBoard({ user, onLogout, onShowProfile }) {
 
   // === ОСНОВНОЙ ЭКРАН ИГРЫ ===
   return (
-    <div className="container">
+    <div className="container" data-theme={theme}>
       {/* ===== ВЕРХНЯЯ ПАНЕЛЬ ===== */}
       <div className="top-panel">
         <div className="top-panel-left">
           <div className="round">🔁 РАУНД {gameState.currentTurn + 1}</div>
+          <span className="mode-badge">{gameMode === 'fast' ? '🚀 Быстрый' : '⚡ Обычный'}</span>
           {user && <span className="user-name">👤 {user.displayName}</span>}
         </div>
         <div className="top-panel-center">
@@ -754,7 +872,6 @@ export function GameBoard({ user, onLogout, onShowProfile }) {
           </div>
         </div>
         <div className="top-panel-right">
-          {/* Кнопка профиля */}
           <button className="top-btn profile-btn" onClick={onShowProfile} title="Профиль">
             👤
           </button>
@@ -779,7 +896,7 @@ export function GameBoard({ user, onLogout, onShowProfile }) {
       </div>
 
       {/* ===== КОМПАНИИ ===== */}
-      <h2 style={{ color: 'white', marginBottom: '15px', textShadow: '0 2px 10px rgba(0,0,0,0.3)' }}>
+      <h2 style={{ color: 'var(--text-white)', marginBottom: '15px', textShadow: '0 2px 10px rgba(0,0,0,0.3)' }}>
         🏢 КОМПАНИИ ({gameState.companies.length})
       </h2>
       <div className="companies-grid">
@@ -788,7 +905,9 @@ export function GameBoard({ user, onLogout, onShowProfile }) {
             key={company.id}
             className={`company-card ${isHumanTurn && roleSelection === 'hacker' ? 'selectable' : ''} ${selectedCompany?.id === company.id ? 'selected' : ''}`}
             onClick={() => {
-              if (isHumanTurn && roleSelection === 'hacker') {
+              if (isHumanTurn && roleSelection === 'hacker' && !selectedAttackCard) {
+                setMessage('Сначала выберите карту атаки');
+              } else if (isHumanTurn && roleSelection === 'hacker' && selectedAttackCard) {
                 setSelectedCompany(company);
               }
             }}
@@ -806,7 +925,7 @@ export function GameBoard({ user, onLogout, onShowProfile }) {
                 <div><span className="temporary">Временные:</span> {company.temporaryDefenses.map(d => d.name).join(', ')}</div>
               )}
               {(!company.permanentDefenses?.length && !company.temporaryDefenses?.length) && (
-                <div style={{ color: '#999' }}>Нет активных защит</div>
+                <div style={{ color: 'var(--text-muted)' }}>Нет активных защит</div>
               )}
             </div>
           </div>
@@ -814,7 +933,7 @@ export function GameBoard({ user, onLogout, onShowProfile }) {
       </div>
 
       {/* ===== ХАКЕРЫ ===== */}
-      <h2 style={{ color: 'white', marginBottom: '15px', textShadow: '0 2px 10px rgba(0,0,0,0.3)' }}>
+      <h2 style={{ color: 'var(--text-white)', marginBottom: '15px', textShadow: '0 2px 10px rgba(0,0,0,0.3)' }}>
         👾 ХАКЕРЫ ({gameState.hackers.length})
       </h2>
       <div className="hackers-grid">
@@ -838,7 +957,16 @@ export function GameBoard({ user, onLogout, onShowProfile }) {
               cards={currentPlayer.hand}
               type="attack"
               title="🗡️ ВАШИ КАРТЫ АТАК"
-              onCardClick={(card) => setSelectedAttackCard(card)}
+              onCardClick={(card) => {
+                if (selectedAttackCard?.id === card.id) {
+                  setSelectedAttackCard(null);
+                  setSelectedCompany(null);
+                } else {
+                  setSelectedAttackCard(card);
+                  setSelectedCompany(null);
+                  setMessage(`Выбрана карта: ${card.name}`);
+                }
+              }}
               selectedCardId={selectedAttackCard?.id}
               onDiscard={handleDiscardCard}
             />
@@ -849,7 +977,14 @@ export function GameBoard({ user, onLogout, onShowProfile }) {
               cards={currentPlayer.hand}
               type="defense"
               title="🛡️ ВАШИ КАРТЫ ЗАЩИТЫ"
-              onCardClick={(card) => setSelectedDefenseCard(card)}
+              onCardClick={(card) => {
+                if (selectedDefenseCard?.id === card.id) {
+                  setSelectedDefenseCard(null);
+                } else {
+                  setSelectedDefenseCard(card);
+                  setMessage(`Выбрана карта: ${card.name}`);
+                }
+              }}
               selectedCardId={selectedDefenseCard?.id}
               onDiscard={handleDiscardCard}
               playerCharacteristics={currentPlayer.characteristics}
@@ -907,13 +1042,14 @@ export function GameBoard({ user, onLogout, onShowProfile }) {
         <div style={{
           marginTop: '20px',
           padding: '15px',
-          backgroundColor: 'rgba(255,255,255,0.9)',
+          backgroundColor: 'var(--bg-card)',
           borderRadius: '12px',
           textAlign: 'center',
-          border: '2px solid #6fbda8'
+          border: '2px solid #6fbda8',
+          color: 'var(--text-primary)'
         }}>
           <p>🤖 <strong>{currentPlayer?.name}</strong> выполняет ход...</p>
-          <div style={{ fontSize: '12px', color: '#666' }}>Пожалуйста, подождите</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Пожалуйста, подождите</div>
         </div>
       )}
 
@@ -929,7 +1065,7 @@ export function GameBoard({ user, onLogout, onShowProfile }) {
 
       {/* ===== МОДАЛЬНОЕ ОКНО ДЛЯ ВЫБОРА ХАРАКТЕРИСТИКИ ===== */}
       {choosingCharacteristic && (
-        <div className="modal-overlay">
+        <div className="modal-overlay" data-theme={theme}>
           <div className="modal-content">
             <h3>Выберите характеристику для атаки</h3>
             {Object.entries(characteristicNames).map(([key, name]) => (
@@ -943,7 +1079,10 @@ export function GameBoard({ user, onLogout, onShowProfile }) {
             ))}
             <button
               className="modal-btn modal-btn-cancel"
-              onClick={() => setChoosingCharacteristic(null)}
+              onClick={() => {
+                setChoosingCharacteristic(null);
+                setSelectedAttackCard(null);
+              }}
             >
               Отмена
             </button>
@@ -961,6 +1100,7 @@ export function GameBoard({ user, onLogout, onShowProfile }) {
               clearStats();
             }
           }}
+          theme={theme}
         />
       )}
 
@@ -969,6 +1109,7 @@ export function GameBoard({ user, onLogout, onShowProfile }) {
         <History
           history={stats.history}
           onClose={() => setShowHistory(false)}
+          theme={theme}
         />
       )}
     </div>
