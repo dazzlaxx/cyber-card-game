@@ -1,4 +1,3 @@
-// src/components/GameBoard.jsx
 // ============================================================
 // ГЛАВНЫЙ КОМПОНЕНТ ИГРЫ
 // ============================================================
@@ -15,7 +14,7 @@ import {
   discardAndDraw,
   clearCompanyTemporaryDefenses,
   checkDefense,
-  canPlayerAct
+  canPlayerActCheck
 } from '../game/gameLogic';
 import { createHackerBot, createCompanyBot } from '../game/botLogic';
 import { characteristicNames, characteristicIcons } from '../data/characteristics';
@@ -143,6 +142,34 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
   }, []);
 
   // ============================================================
+  // АВТОМАТИЧЕСКИЙ ВОЗВРАТ НА ГЛАВНЫЙ ЭКРАН
+  // ============================================================
+  useEffect(() => {
+    if (gameState?.gameOver) {
+      const timer = setTimeout(() => {
+        setRoleSelection(null);
+        setGameState(null);
+        setGameLog([]);
+        setSelectedAttackCard(null);
+        setSelectedCompany(null);
+        setSelectedDefenseCard(null);
+        setCurrentGameData({
+          damageDealt: 0,
+          damageTaken: 0,
+          cardsUsed: 0,
+          defensesUsed: 0,
+          rounds: 0
+        });
+        setIsGameFinished(false);
+        processingRef.current = false;
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      }, 5000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [gameState?.gameOver]);
+
+  // ============================================================
   // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
   // ============================================================
 
@@ -221,22 +248,27 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
   };
 
   // ============================================================
-  // ПРОВЕРКА ОКОНЧАНИЯ ИГРЫ С СОХРАНЕНИЕМ СТАТИСТИКИ
+  // ПРОВЕРКА ОКОНЧАНИЯ ИГРЫ
   // ============================================================
   const checkGameOver = useCallback((state) => {
     const newState = { ...state };
 
+    // Удаляем мёртвых игроков
+    newState.hackers = newState.hackers.filter(h => h.isAlive !== false && h.health > 0);
+    newState.companies = newState.companies.filter(c => c.isAlive !== false && c.health > 0);
+
     // Проверяем, жив ли игрок-человек
     const humanPlayer = newState.hackers.find(h => h.isHuman) || newState.companies.find(c => c.isHuman);
     
-    if (humanPlayer && (humanPlayer.health <= 0 || humanPlayer.isAlive === false)) {
+    // Если игрок-человек мёртв или его нет в списке — игра окончена
+    if (!humanPlayer) {
       newState.gameOver = true;
-      const isHacker = humanPlayer.role === 'hacker';
-      newState.winner = isHacker ? 'companies' : 'hackers';
+      const isHackerRole = roleSelection === 'hacker';
+      newState.winner = isHackerRole ? 'companies' : 'hackers';
       
       if (!newState.gameOverAdded) {
         newState.gameOverAdded = true;
-        addLogMessage(`💀 ${humanPlayer.name} погиб! Игра окончена.`);
+        addLogMessage(`💀 ${roleSelection === 'hacker' ? 'Хакер' : 'Компания'} погиб! Игра окончена.`);
         addGame({
           role: roleSelection,
           won: false,
@@ -253,34 +285,21 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       return newState;
     }
 
-    // Проверяем, есть ли живые игроки
     const aliveHackers = newState.hackers.filter(h => h.isAlive !== false && h.health > 0);
     const aliveCompanies = newState.companies.filter(c => c.isAlive !== false && c.health > 0);
 
+    // Все хакеры умерли
     if (aliveHackers.length === 0) {
       newState.gameOver = true;
       newState.winner = 'companies';
       addLogMessage('🏆 КОМПАНИИ ПОБЕДИЛИ! Все хакеры уничтожены.');
 
-      if (roleSelection === 'hacker' && !newState.gameOverAdded) {
+      if (!newState.gameOverAdded) {
         newState.gameOverAdded = true;
+        const isHacker = roleSelection === 'hacker';
         addGame({
-          role: 'hacker',
-          won: false,
-          damageDealt: currentGameData.damageDealt,
-          damageTaken: currentGameData.damageTaken,
-          cardsUsed: currentGameData.cardsUsed,
-          defensesUsed: currentGameData.defensesUsed,
-          rounds: newState.currentTurn + 1,
-          opponent: 'Боты',
-          mode: gameMode
-        });
-        setIsGameFinished(true);
-      } else if (roleSelection === 'company' && !newState.gameOverAdded) {
-        newState.gameOverAdded = true;
-        addGame({
-          role: 'company',
-          won: true,
+          role: roleSelection,
+          won: isHacker ? false : true,
           damageDealt: currentGameData.damageDealt,
           damageTaken: currentGameData.damageTaken,
           cardsUsed: currentGameData.cardsUsed,
@@ -294,30 +313,18 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       return newState;
     }
 
+    // Все компании умерли
     if (aliveCompanies.length === 0) {
       newState.gameOver = true;
       newState.winner = 'hackers';
       addLogMessage('🏆 ХАКЕРЫ ПОБЕДИЛИ! Все компании уничтожены.');
 
-      if (roleSelection === 'hacker' && !newState.gameOverAdded) {
+      if (!newState.gameOverAdded) {
         newState.gameOverAdded = true;
+        const isHacker = roleSelection === 'hacker';
         addGame({
-          role: 'hacker',
-          won: true,
-          damageDealt: currentGameData.damageDealt,
-          damageTaken: currentGameData.damageTaken,
-          cardsUsed: currentGameData.cardsUsed,
-          defensesUsed: currentGameData.defensesUsed,
-          rounds: newState.currentTurn + 1,
-          opponent: 'Боты',
-          mode: gameMode
-        });
-        setIsGameFinished(true);
-      } else if (roleSelection === 'company' && !newState.gameOverAdded) {
-        newState.gameOverAdded = true;
-        addGame({
-          role: 'company',
-          won: false,
+          role: roleSelection,
+          won: isHacker ? true : false,
           damageDealt: currentGameData.damageDealt,
           damageTaken: currentGameData.damageTaken,
           cardsUsed: currentGameData.cardsUsed,
@@ -331,28 +338,18 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       return newState;
     }
 
-    // Проверяем, может ли текущий игрок сделать ход
-    const currentPlayer = getCurrentPlayer(newState);
-    if (currentPlayer && !canPlayerAct(newState, currentPlayer)) {
-      addLogMessage(`⚠️ ${currentPlayer.name} не может сделать ход! Игра завершена.`);
-      
-      // Если текущий игрок не может ходить, его команда проигрывает
-      if (currentPlayer.role === 'hacker') {
-        newState.gameOver = true;
-        newState.winner = 'companies';
-        addLogMessage('🏆 КОМПАНИИ ПОБЕДИЛИ! Хакер не может ходить.');
-      } else {
-        newState.gameOver = true;
-        newState.winner = 'hackers';
-        addLogMessage('🏆 ХАКЕРЫ ПОБЕДИЛИ! Компания не может ходить.');
-      }
+    // Проверяем, может ли игрок-человек сделать ход
+    if (!canPlayerActCheck(newState, humanPlayer)) {
+      newState.gameOver = true;
+      const isHacker = humanPlayer.role === 'hacker';
+      newState.winner = isHacker ? 'companies' : 'hackers';
+      addLogMessage(`⚠️ ${humanPlayer.name} не может сделать ход! (Нет карт или целей)`);
       
       if (!newState.gameOverAdded) {
         newState.gameOverAdded = true;
-        const isHacker = currentPlayer.role === 'hacker';
         addGame({
           role: roleSelection,
-          won: isHacker ? false : true,
+          won: false,
           damageDealt: currentGameData.damageDealt,
           damageTaken: currentGameData.damageTaken,
           cardsUsed: currentGameData.cardsUsed,
@@ -393,19 +390,20 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
 
     addLogMessage(`🤖 Ход: ${currentPlayer.name}`);
 
-    // ===== ПРОВЕРКА: МОЖЕТ ЛИ БОТ СДЕЛАТЬ ХОД =====
-    if (!canPlayerAct(newState, currentPlayer)) {
-      addLogMessage(`⚠️ ${currentPlayer.name} НЕ МОЖЕТ СДЕЛАТЬ ХОД! (Нет карт или целей)`);
-      // Если бот не может ходить, его команда проигрывает
-      if (currentPlayer.role === 'hacker') {
-        newState.gameOver = true;
-        newState.winner = 'companies';
-        addLogMessage('🏆 КОМПАНИИ ПОБЕДИЛИ! Хакер не может ходить.');
-      } else {
-        newState.gameOver = true;
-        newState.winner = 'hackers';
-        addLogMessage('🏆 ХАКЕРЫ ПОБЕДИЛИ! Компания не может ходить.');
+    // Если бот не может сделать ход — пропускаем
+    if (!canPlayerActCheck(newState, currentPlayer)) {
+      addLogMessage(`⚠️ ${currentPlayer.name} не может сделать ход! (Нет карт или целей) — ход пропущен.`);
+      
+      const totalPlayers = newState.hackers.length + newState.companies.length;
+      if (totalPlayers > 0) {
+        newState.currentPlayerIndex = (newState.currentPlayerIndex + 1) % totalPlayers;
+        if (newState.currentPlayerIndex === 0) {
+          newState.currentTurn++;
+          addLogMessage(`--- РАУНД ${newState.currentTurn + 1} ---`);
+        }
       }
+      newState = checkGameOver(newState);
+      
       processingRef.current = false;
       setIsProcessing(false);
       return newState;
@@ -415,7 +413,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       if (currentPlayer.role === 'hacker') {
         const aliveCompanies = newState.companies.filter(c => c.isAlive !== false && c.health > 0);
 
-        // Проверка: если нет живых компаний
         if (aliveCompanies.length === 0) {
           newState.gameOver = true;
           newState.winner = 'companies';
@@ -521,7 +518,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       addLogMessage(`⚠️ Ошибка при ходе бота ${currentPlayer.name}`);
     }
 
-    // Проверка на окончание игры после хода
     const aliveCompanies = newState.companies.filter(c => c.isAlive !== false && c.health > 0);
     const aliveHackers = newState.hackers.filter(h => h.isAlive !== false && h.health > 0);
 
@@ -543,11 +539,9 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       return newState;
     }
 
-    // Переход к следующему игроку
     const totalPlayers = newState.hackers.length + newState.companies.length;
     if (totalPlayers > 0) {
       newState.currentPlayerIndex = (newState.currentPlayerIndex + 1) % totalPlayers;
-
       if (newState.currentPlayerIndex === 0) {
         newState.currentTurn++;
         addLogMessage(`--- РАУНД ${newState.currentTurn + 1} ---`);
@@ -642,7 +636,22 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       }
     }
 
-    // Проверка на окончание игры
+    // Удаляем мёртвых игроков
+    newState.hackers = newState.hackers.filter(h => h.isAlive !== false && h.health > 0);
+    newState.companies = newState.companies.filter(c => c.isAlive !== false && c.health > 0);
+
+    // Проверяем, жив ли игрок-человек
+    const humanPlayer = newState.hackers.find(h => h.isHuman) || newState.companies.find(c => c.isHuman);
+    if (!humanPlayer) {
+      newState.gameOver = true;
+      const isHacker = roleSelection === 'hacker';
+      newState.winner = isHacker ? 'companies' : 'hackers';
+      addLogMessage(`💀 Игрок погиб! Игра окончена.`);
+      setGameState(newState);
+      setMessage('Игра окончена! Вы погибли.');
+      return;
+    }
+
     const aliveCompanies = newState.companies.filter(c => c.isAlive !== false && c.health > 0);
     const aliveHackers = newState.hackers.filter(h => h.isAlive !== false && h.health > 0);
 
@@ -667,7 +676,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
     const totalPlayers = newState.hackers.length + newState.companies.length;
     if (totalPlayers > 0) {
       newState.currentPlayerIndex = (newState.currentPlayerIndex + 1) % totalPlayers;
-
       if (newState.currentPlayerIndex === 0) {
         newState.currentTurn++;
         addLogMessage(`--- РАУНД ${newState.currentTurn + 1} ---`);
@@ -827,7 +835,7 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
   };
 
   // ============================================================
-  // РЕНДЕРИНГ
+  // РЕНДЕРИНГ - ЭКРАН ВЫБОРА РОЛИ
   // ============================================================
 
   if (!roleSelection) {
@@ -925,63 +933,112 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
     );
   }
 
-  // ===== ЭКРАН ОКОНЧАНИЯ ИГРЫ =====
+  // ============================================================
+  // ЭКРАН ОКОНЧАНИЯ ИГРЫ
+  // ============================================================
   if (gameState?.gameOver) {
-    // ===== АВТОМАТИЧЕСКИЙ ВОЗВРАТ ЧЕРЕЗ 5 СЕКУНД =====
-    useEffect(() => {
-      const timer = setTimeout(() => {
-        setRoleSelection(null);
-        setGameState(null);
-        setGameLog([]);
-        setSelectedAttackCard(null);
-        setSelectedCompany(null);
-        setSelectedDefenseCard(null);
-        setCurrentGameData({
-          damageDealt: 0,
-          damageTaken: 0,
-          cardsUsed: 0,
-          defensesUsed: 0,
-          rounds: 0
-        });
-        setIsGameFinished(false);
-        processingRef.current = false;
-        if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      }, 5000);
-      return () => clearTimeout(timer);
-    }, []);
+    let reason = '';
+    let emoji = '';
+    let color = '';
+
+    const humanPlayer = gameState.hackers.find(h => h.isHuman) || gameState.companies.find(c => c.isHuman);
+    
+    if (humanPlayer && (humanPlayer.health <= 0 || humanPlayer.isAlive === false)) {
+      reason = `💀 Ваш персонаж погиб!`;
+      emoji = '💀';
+      color = '#e74c3c';
+    } else if (gameState.winner === 'hackers') {
+      reason = `👾 Все компании уничтожены!`;
+      emoji = '👾';
+      color = '#e74c3c';
+    } else if (gameState.winner === 'companies') {
+      reason = `🏢 Все хакеры уничтожены!`;
+      emoji = '🏢';
+      color = '#2ecc71';
+    } else {
+      reason = `Игра завершена`;
+      emoji = '🏁';
+      color = '#6fbda8';
+    }
+
+    const lastLog = gameLog.length > 0 ? gameLog[0] : '';
+    if (lastLog.includes('не может сделать ход') && !reason.includes('погиб')) {
+      reason = `⚠️ Вы не можете сделать ход (нет карт или целей)`;
+      emoji = '⚠️';
+      color = '#f39c12';
+    }
+
+    const isPlayerHacker = roleSelection === 'hacker';
+    const playerWon = (gameState.winner === 'hackers' && isPlayerHacker) || 
+                      (gameState.winner === 'companies' && !isPlayerHacker);
+
+    const resultText = playerWon ? 'ПОБЕДА! 🎉' : 'ПОРАЖЕНИЕ... 😔';
+    const resultColor = playerWon ? '#27ae60' : '#e74c3c';
 
     return (
       <div className="game-over" data-theme={theme}>
-        <h1>🏁 Игра окончена!</h1>
-        <div className={`winner winner-${gameState.winner === 'hackers' ? 'hackers' : 'companies'}`}>
-          {gameState.winner === 'hackers' ? '👾 Хакеры победили!' : '🏢 Компании победили!'}
+        <div className="game-over-content">
+          <div className="game-over-icon">{emoji}</div>
+          <h1>🏁 Игра окончена</h1>
+          <div className="game-over-result" style={{ color: resultColor }}>
+            {resultText}
+          </div>
+          <div className="game-over-reason">
+            {reason}
+          </div>
+          <div className="game-over-winner" style={{ color: gameState.winner === 'hackers' ? '#e74c3c' : '#2ecc71' }}>
+            {gameState.winner === 'hackers' ? '👾 Хакеры победили!' : '🏢 Компании победили!'}
+          </div>
+
+          <div className="game-over-stats">
+            <div className="stat-item">
+              <div className="stat-value">{gameState.currentTurn + 1}</div>
+              <div className="stat-label">Раундов</div>
+            </div>
+            <div className="stat-item">
+              <div className="stat-value">{currentGameData.damageDealt}</div>
+              <div className="stat-label">Нанесено урона</div>
+            </div>
+            <div className="stat-item">
+              <div className="stat-value">{currentGameData.cardsUsed}</div>
+              <div className="stat-label">Карт использовано</div>
+            </div>
+            <div className="stat-item">
+              <div className="stat-value">{gameMode === 'fast' ? '🚀' : '⚡'}</div>
+              <div className="stat-label">{gameMode === 'fast' ? 'Быстрый режим' : 'Обычный режим'}</div>
+            </div>
+          </div>
+
+          <div className="game-over-buttons">
+            <button className="btn-new-game" onClick={() => {
+              setRoleSelection(null);
+              setGameState(null);
+              setGameLog([]);
+              setSelectedAttackCard(null);
+              setSelectedCompany(null);
+              setSelectedDefenseCard(null);
+              setCurrentGameData({
+                damageDealt: 0,
+                damageTaken: 0,
+                cardsUsed: 0,
+                defensesUsed: 0,
+                rounds: 0
+              });
+              setIsGameFinished(false);
+              processingRef.current = false;
+              if (timeoutRef.current) clearTimeout(timeoutRef.current);
+            }}>
+              🔄 Новая игра
+            </button>
+            <button className="btn-stats" onClick={() => setShowStats(true)}>
+              📊 Статистика
+            </button>
+          </div>
+
+          <p className="return-timer">
+            ⏳ Возврат на главный экран через 5 секунд...
+          </p>
         </div>
-        <div className="game-mode-info">
-          Режим: {gameMode === 'fast' ? '🚀 Быстрый' : '⚡ Обычный'}
-        </div>
-        <button className="btn-new-game" onClick={() => {
-          setRoleSelection(null);
-          setGameState(null);
-          setGameLog([]);
-          setSelectedAttackCard(null);
-          setSelectedCompany(null);
-          setSelectedDefenseCard(null);
-          setCurrentGameData({
-            damageDealt: 0,
-            damageTaken: 0,
-            cardsUsed: 0,
-            defensesUsed: 0,
-            rounds: 0
-          });
-          setIsGameFinished(false);
-          processingRef.current = false;
-          if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        }}>
-          🔄 Новая игра
-        </button>
-        <p style={{ marginTop: '15px', color: 'var(--text-muted)', fontSize: '14px' }}>
-          ⏳ Возврат на главный экран через 5 секунд...
-        </p>
       </div>
     );
   }

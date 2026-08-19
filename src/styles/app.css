@@ -1,8 +1,10 @@
+/* src/styles/app.css */
 /* ============================================================
    ГЛОБАЛЬНЫЕ СТИЛИ ДЛЯ ИГРЫ "CYBER CONFLICT"
    Цветовая гамма: #6fbda8 (бирюзово-зеленый)
    Шрифты: Orbitron (заголовки) + Inter (текст)
    Поддержка светлой и тёмной темы
+   РАСШИРЕННАЯ АДАПТИВНОСТЬ: 1024px, 768px, 480px, 360px
    ============================================================ */
 
 /* ============================================================
@@ -100,7 +102,6 @@
 
 body {
   font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  /* ===== МЯТНЫЙ ФОН ДЛЯ СВЕТЛОЙ ТЕМЫ ===== */
   background: linear-gradient(135deg, #6fbda8 0%, #4a8f7a 50%, #2c5e4e 100%);
   min-height: 100vh;
   color: var(--text-primary);
@@ -108,7 +109,6 @@ body {
   line-height: 1.6;
 }
 
-/* В тёмной теме переопределяем фон */
 [data-theme="dark"] body {
   background: #0a0a18;
 }
@@ -116,7 +116,6 @@ body {
 .App {
   min-height: 100vh;
   padding: 20px;
-  /* Прозрачный фон, чтобы был виден градиент из body */
   background: transparent;
   transition: background-color 0.3s ease;
 }
@@ -2001,31 +2000,49 @@ button:disabled {
 }
 
 /* ============================================================
-   АДАПТИВНОСТЬ
+   ============================================================
+   РАСШИРЕННАЯ АДАПТИВНОСТЬ
+   ============================================================
    ============================================================ */
 
+/* ===== ПЛАНШЕТЫ И НЕБОЛЬШИЕ ЭКРАНЫ (до 1024px) ===== */
+@media (max-width: 1024px) {
+  .companies-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  }
+
+  .role-card-wrapper {
+    min-width: 240px;
+  }
+
+  .action-panel {
+    min-width: 240px;
+    padding: 14px 18px;
+  }
+
+  .card {
+    max-width: 160px;
+    min-height: 180px;
+  }
+
+  .top-panel .round {
+    font-size: 16px;
+  }
+}
+
+/* ===== ПЛАНШЕТЫ (до 768px) ===== */
 @media (max-width: 768px) {
-  .theme-toggle-left {
-    top: 10px;
-    left: 15px;
-    width: 38px;
-    height: 38px;
-    font-size: 18px;
+  .App {
+    padding: 10px;
   }
 
-  .theme-toggle-auth {
-    top: 10px;
-    left: 15px;
-    width: 38px;
-    height: 38px;
-    font-size: 18px;
+  .container {
+    padding: 10px;
   }
 
-  .profile-trigger {
-    top: 10px;
-    right: 15px;
-    padding: 6px 14px;
-    font-size: 12px;
+  .companies-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
   }
 
   .role-select-container {
@@ -2043,14 +2060,6 @@ button:disabled {
     padding: 20px;
   }
 
-  .rules-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .role-select h1 {
-    font-size: 32px;
-  }
-
   .role-modes {
     flex-direction: column;
   }
@@ -2058,6 +2067,10 @@ button:disabled {
   .mode-btn {
     padding: 10px;
     font-size: 13px;
+  }
+
+  .rules-grid {
+    grid-template-columns: 1fr;
   }
 
   .top-panel {
@@ -2074,18 +2087,26 @@ button:disabled {
 
   .action-panel {
     min-width: auto;
-    width: calc(100% - 40px);
+    width: calc(100% - 20px);
     bottom: 10px;
-    right: 20px;
-    padding: 14px 16px;
+    right: 10px;
+    padding: 12px 14px;
+    border-radius: 12px;
   }
 
   .action-panel .actions-row {
     flex-direction: column;
   }
 
-  .companies-grid {
-    grid-template-columns: 1fr;
+  .action-panel .btn-attack,
+  .action-panel .btn-defense {
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+
+  .action-panel .btn-end-turn {
+    font-size: 14px;
+    padding: 10px;
   }
 
   .profile-stats-preview {
@@ -2094,22 +2115,6 @@ button:disabled {
 
   .profile-roles-grid {
     grid-template-columns: 1fr;
-  }
-
-  .profile-box {
-    padding: 25px 20px;
-    margin: 10px;
-    max-height: 90vh;
-  }
-
-  .profile-header-left h2 {
-    font-size: 18px;
-  }
-
-  .profile-avatar {
-    font-size: 36px;
-    width: 48px;
-    height: 48px;
   }
 
   .stats-grid {
@@ -2129,33 +2134,51 @@ button:disabled {
   }
 
   .auth-box {
-    padding: 30px 25px;
+    padding: 25px 20px;
   }
 
-  .auth-box h1 {
-    font-size: 26px;
+  .hand-container {
+    padding: 10px;
   }
 
-  .history-box {
+  .card {
+    max-width: 150px;
+    min-height: 160px;
+    padding: 10px;
+  }
+
+  .card h3 {
+    font-size: 11px;
+  }
+
+  .company-card {
+    padding: 12px;
+  }
+
+  .hacker-card {
+    min-width: 120px;
+    padding: 10px 14px;
+  }
+
+  .modal-content {
     padding: 20px;
-  }
-}
-
-@media (max-width: 480px) {
-  .theme-toggle-left {
-    top: 10px;
-    left: 10px;
-    width: 34px;
-    height: 34px;
-    font-size: 16px;
+    width: 95%;
   }
 
-  .theme-toggle-auth {
-    top: 10px;
-    left: 10px;
-    width: 34px;
-    height: 34px;
-    font-size: 16px;
+  .profile-box {
+    padding: 20px;
+    margin: 10px;
+    max-height: 90vh;
+  }
+
+  .profile-header-left h2 {
+    font-size: 18px;
+  }
+
+  .profile-avatar {
+    font-size: 36px;
+    width: 48px;
+    height: 48px;
   }
 
   .profile-trigger {
@@ -2165,20 +2188,20 @@ button:disabled {
     font-size: 11px;
   }
 
-  .role-select h1 {
-    font-size: 24px;
+  .theme-toggle-left {
+    top: 10px;
+    left: 10px;
+    width: 36px;
+    height: 36px;
+    font-size: 17px;
   }
 
-  .role-card h2 {
-    font-size: 22px;
-  }
-
-  .role-rules ul li {
-    font-size: 12px;
-  }
-
-  .rules-section {
-    padding: 15px;
+  .theme-toggle-auth {
+    top: 10px;
+    left: 10px;
+    width: 36px;
+    height: 36px;
+    font-size: 17px;
   }
 
   .top-btn {
@@ -2187,13 +2210,190 @@ button:disabled {
     font-size: 15px;
   }
 
-  .stats-number {
+  .log-container {
+    max-height: 150px;
+    padding: 10px;
+  }
+
+  .game-over {
+    padding: 30px 15px;
+  }
+
+  .game-over h1 {
+    font-size: 28px;
+  }
+
+  .role-select h1 {
+    font-size: 32px;
+  }
+
+  .role-select .subtitle {
+    font-size: 16px;
+  }
+}
+
+/* ===== МОБИЛЬНЫЕ ТЕЛЕФОНЫ (до 480px) ===== */
+@media (max-width: 480px) {
+  .App {
+    padding: 5px;
+  }
+
+  .container {
+    padding: 5px;
+  }
+
+  .companies-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .company-card {
+    padding: 10px;
+  }
+
+  .card {
+    max-width: 130px;
+    min-height: 140px;
+    padding: 8px;
+    margin: 4px;
+  }
+
+  .card h3 {
+    font-size: 10px;
+  }
+
+  .hand-container {
+    padding: 8px;
+    margin: 8px 0;
+  }
+
+  .hand-title {
+    font-size: 14px;
+  }
+
+  .hackers-grid {
+    gap: 8px;
+  }
+
+  .hacker-card {
+    min-width: 100px;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .action-panel {
+    padding: 10px 12px;
+    border-radius: 10px;
+    width: calc(100% - 10px);
+    bottom: 5px;
+    right: 5px;
+  }
+
+  .action-panel .btn-attack,
+  .action-panel .btn-defense {
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+
+  .action-panel .btn-end-turn {
+    font-size: 13px;
+    padding: 8px;
+  }
+
+  .top-panel {
+    padding: 8px 12px;
+    gap: 5px;
+  }
+
+  .top-panel .round {
+    font-size: 13px;
+  }
+
+  .top-panel .current-player {
+    font-size: 11px;
+  }
+
+  .top-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 13px;
+  }
+
+  .message-bar {
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+
+  .log-container {
+    max-height: 120px;
+    font-size: 10px;
+    padding: 8px;
+  }
+
+  .role-select h1 {
+    font-size: 22px;
+  }
+
+  .role-select .subtitle {
+    font-size: 14px;
+  }
+
+  .role-card-wrapper {
+    min-width: unset;
+    width: 100%;
+  }
+
+  .role-card {
+    padding: 15px;
+  }
+
+  .role-card h2 {
+    font-size: 20px;
+  }
+
+  .role-card-header {
+    font-size: 36px;
+  }
+
+  .role-rules ul li {
+    font-size: 12px;
+  }
+
+  .rules-section {
+    padding: 12px;
+  }
+
+  .rules-section h3 {
+    font-size: 16px;
+  }
+
+  .rules-column {
+    padding: 10px;
+  }
+
+  .rules-column p {
+    font-size: 12px;
+  }
+
+  .rules-modes {
+    padding: 10px 12px;
+  }
+
+  .rules-modes p {
+    font-size: 12px;
+  }
+
+  .game-over h1 {
     font-size: 24px;
   }
 
-  .history-item-details {
-    flex-direction: column;
-    gap: 4px;
+  .game-over .winner {
+    font-size: 20px;
+  }
+
+  .game-over .btn-new-game {
+    font-size: 14px;
+    padding: 10px 20px;
   }
 
   .profile-stats-preview {
@@ -2205,12 +2405,813 @@ button:disabled {
     font-size: 18px;
   }
 
+  .profile-box {
+    padding: 15px;
+  }
+
+  .profile-header-left h2 {
+    font-size: 16px;
+  }
+
+  .profile-avatar {
+    font-size: 28px;
+    width: 40px;
+    height: 40px;
+  }
+
   .profile-btn {
+    font-size: 13px;
+    padding: 8px 14px;
+  }
+
+  .profile-trigger {
+    top: 8px;
+    right: 8px;
+    padding: 4px 10px;
+    font-size: 10px;
+  }
+
+  .theme-toggle-left {
+    top: 8px;
+    left: 8px;
+    width: 32px;
+    height: 32px;
+    font-size: 15px;
+  }
+
+  .theme-toggle-auth {
+    top: 8px;
+    left: 8px;
+    width: 32px;
+    height: 32px;
+    font-size: 15px;
+  }
+
+  .auth-box {
+    padding: 20px 15px;
+  }
+
+  .auth-box h1 {
+    font-size: 22px;
+  }
+
+  .auth-field input {
     font-size: 14px;
-    padding: 10px 16px;
+    padding: 8px 12px;
+  }
+
+  .auth-btn {
+    font-size: 15px;
+    padding: 10px;
+  }
+
+  .modal-content {
+    padding: 15px;
+  }
+
+  .modal-content h3 {
+    font-size: 16px;
+  }
+
+  .modal-content .modal-btn {
+    font-size: 14px;
+    padding: 10px;
+  }
+
+  .stats-number {
+    font-size: 20px;
+  }
+
+  .history-item {
+    padding: 8px 12px;
+  }
+
+  .history-item-details {
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+  }
+
+  .history-date {
+    font-size: 11px;
+  }
+
+  .history-result {
+    font-size: 12px;
+  }
+}
+
+/* ===== ОЧЕНЬ МАЛЕНЬКИЕ ЭКРАНЫ (до 360px) ===== */
+@media (max-width: 360px) {
+  .App {
+    padding: 3px;
+  }
+
+  .container {
+    padding: 3px;
+  }
+
+  .card {
+    max-width: 100px;
+    min-height: 110px;
+    padding: 5px;
+    margin: 3px;
+    border-top-width: 4px;
+  }
+
+  .card h3 {
+    font-size: 8px;
+    margin-bottom: 4px;
+  }
+
+  .company-card {
+    padding: 6px;
+  }
+
+  .company-health {
+    font-size: 11px;
+  }
+
+  .company-health .health-bar {
+    font-size: 10px;
+    padding: 1px 8px;
+  }
+
+  .company-defenses {
+    font-size: 9px;
+    padding: 4px;
+    margin-top: 4px;
+  }
+
+  .hand-container {
+    padding: 5px;
+    margin: 5px 0;
+  }
+
+  .hand-title {
+    font-size: 11px;
+  }
+
+  .hand-title .count {
+    font-size: 10px;
+    padding: 1px 6px;
+  }
+
+  .hacker-card {
+    min-width: 80px;
+    padding: 5px 8px;
+    font-size: 10px;
+  }
+
+  .hacker-card .hacker-name {
+    font-size: 10px;
+  }
+
+  .action-panel {
+    padding: 6px 8px;
+    border-radius: 8px;
+    border-width: 1px;
+    min-width: unset;
+    width: calc(100% - 8px);
+    bottom: 4px;
+    right: 4px;
+  }
+
+  .action-panel .btn-attack,
+  .action-panel .btn-defense {
+    font-size: 10px;
+    padding: 5px 8px;
+    border-radius: 6px;
+  }
+
+  .action-panel .btn-clear {
+    font-size: 9px;
+    padding: 5px 8px;
+  }
+
+  .action-panel .btn-end-turn {
+    font-size: 11px;
+    padding: 5px;
+    margin-top: 5px;
+    border-radius: 6px;
+  }
+
+  .top-panel {
+    padding: 5px 8px;
+    gap: 3px;
+    border-radius: 8px;
+    border-width: 1px;
+  }
+
+  .top-panel .round {
+    font-size: 10px;
+  }
+
+  .top-panel .current-player {
+    font-size: 9px;
+  }
+
+  .top-panel .user-name {
+    font-size: 8px;
+    padding: 2px 6px;
+  }
+
+  .mode-badge {
+    font-size: 8px;
+    padding: 1px 6px;
+  }
+
+  .top-btn {
+    width: 22px;
+    height: 22px;
+    font-size: 10px;
+  }
+
+  .message-bar {
+    font-size: 10px;
+    padding: 5px 8px;
+    border-left-width: 3px;
+    margin-bottom: 8px;
+  }
+
+  .log-container {
+    max-height: 80px;
+    font-size: 8px;
+    padding: 5px;
+    border-width: 1px;
+  }
+
+  .log-container .log-title {
+    font-size: 9px;
+    margin-bottom: 4px;
+  }
+
+  .log-entry {
+    font-size: 8px;
+    padding: 1px 0;
+  }
+
+  .log-entry .time {
+    font-size: 8px;
+  }
+
+  .role-select {
+    padding: 10px;
+  }
+
+  .role-select h1 {
+    font-size: 18px;
+    letter-spacing: 1px;
+  }
+
+  .role-select .subtitle {
+    font-size: 11px;
+    margin-bottom: 15px;
+  }
+
+  .role-card {
+    padding: 10px 12px;
+  }
+
+  .role-card h2 {
+    font-size: 16px;
+  }
+
+  .role-card-header {
+    font-size: 28px;
+  }
+
+  .role-card .role-desc {
+    font-size: 11px;
+    margin: 2px 0 8px 0;
+  }
+
+  .role-rules {
+    padding: 8px 10px;
+    margin: 5px 0 8px 0;
+  }
+
+  .role-rules strong {
+    font-size: 10px;
+  }
+
+  .role-rules ul li {
+    font-size: 10px;
+    padding: 1px 0;
+  }
+
+  .mode-btn {
+    font-size: 10px;
+    padding: 6px;
+    border-radius: 6px;
+  }
+
+  .rules-section {
+    padding: 10px;
+    border-width: 1px;
+  }
+
+  .rules-section h3 {
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
+
+  .rules-column {
+    padding: 6px 8px;
+  }
+
+  .rules-column h4 {
+    font-size: 10px;
+  }
+
+  .rules-column p {
+    font-size: 10px;
+  }
+
+  .rules-modes {
+    padding: 8px 10px;
+    margin-top: 8px;
+  }
+
+  .rules-modes h4 {
+    font-size: 11px;
+  }
+
+  .rules-modes p {
+    font-size: 10px;
+  }
+
+  .game-over {
+    padding: 20px 10px;
+  }
+
+  .game-over h1 {
+    font-size: 20px;
+  }
+
+  .game-over .winner {
+    font-size: 17px;
+    margin: 10px 0;
+  }
+
+  .game-over .btn-new-game {
+    font-size: 12px;
+    padding: 8px 16px;
+    border-radius: 8px;
+  }
+
+  .game-mode-info {
+    font-size: 12px;
+    margin-bottom: 10px;
+  }
+
+  .modal-content {
+    padding: 12px;
+    border-width: 2px;
+  }
+
+  .modal-content h3 {
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
+
+  .modal-content .modal-btn {
+    font-size: 12px;
+    padding: 8px;
+    margin: 4px 0;
+    border-radius: 6px;
+  }
+
+  .profile-trigger {
+    top: 5px;
+    right: 5px;
+    padding: 3px 8px;
+    font-size: 8px;
+    border-width: 1px;
+  }
+
+  .theme-toggle-left {
+    top: 5px;
+    left: 5px;
+    width: 26px;
+    height: 26px;
+    font-size: 12px;
+    border-width: 1px;
+  }
+
+  .theme-toggle-auth {
+    top: 5px;
+    left: 5px;
+    width: 26px;
+    height: 26px;
+    font-size: 12px;
+    border-width: 1px;
+  }
+
+  .auth-box {
+    padding: 15px 12px;
+    border-width: 1px;
+  }
+
+  .auth-box h1 {
+    font-size: 18px;
+  }
+
+  .auth-subtitle {
+    font-size: 12px;
+    margin-bottom: 15px;
+  }
+
+  .auth-field label {
+    font-size: 11px;
+  }
+
+  .auth-field input {
+    font-size: 12px;
+    padding: 6px 10px;
+    border-width: 1px;
+  }
+
+  .auth-btn {
+    font-size: 13px;
+    padding: 8px;
+  }
+
+  .auth-switch {
+    font-size: 11px;
+  }
+
+  .auth-demo {
+    font-size: 10px;
+    padding: 4px 8px;
+  }
+
+  .auth-logo {
+    font-size: 32px;
   }
 
   .profile-box {
+    padding: 12px;
+    border-width: 2px;
+  }
+
+  .profile-header {
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+  }
+
+  .profile-header-left h2 {
+    font-size: 14px;
+  }
+
+  .profile-avatar {
+    font-size: 24px;
+    width: 34px;
+    height: 34px;
+  }
+
+  .profile-username {
+    font-size: 10px;
+  }
+
+  .profile-info {
+    padding: 8px;
+    margin-bottom: 10px;
+  }
+
+  .profile-info-item {
+    font-size: 10px;
+    padding: 3px 0;
+  }
+
+  .profile-stats-preview {
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    margin-bottom: 10px;
+  }
+
+  .profile-stat-card {
+    padding: 6px 4px;
+  }
+
+  .profile-stat-card .stat-icon {
+    font-size: 16px;
+  }
+
+  .profile-stat-card .stat-value {
+    font-size: 14px;
+  }
+
+  .profile-stat-card .stat-label {
+    font-size: 8px;
+  }
+
+  .profile-roles h4 {
+    font-size: 11px;
+  }
+
+  .profile-role-card {
+    padding: 6px;
+  }
+
+  .profile-role-card .role-icon {
+    font-size: 18px;
+  }
+
+  .profile-role-card .role-name {
+    font-size: 11px;
+  }
+
+  .role-stats-mini {
+    font-size: 9px;
+    gap: 4px;
+  }
+
+  .profile-btn {
+    font-size: 11px;
+    padding: 6px 10px;
+    border-radius: 6px;
+  }
+
+  .profile-version {
+    font-size: 9px;
+    margin-top: 8px;
+    padding-top: 8px;
+  }
+
+  .stats-box {
+    padding: 15px;
+    border-width: 2px;
+  }
+
+  .stats-header h2 {
+    font-size: 16px;
+  }
+
+  .stats-close {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+
+  .stats-card {
+    padding: 10px;
+  }
+
+  .stats-card h3 {
+    font-size: 9px;
+  }
+
+  .stats-number {
+    font-size: 16px;
+  }
+
+  .stats-roles h3 {
+    font-size: 13px;
+  }
+
+  .stats-role-card {
+    padding: 10px;
+  }
+
+  .stats-role-card .role-icon {
+    font-size: 22px;
+  }
+
+  .stats-role-card .role-name {
+    font-size: 12px;
+  }
+
+  .stats-role-card .role-stats {
+    font-size: 10px;
+  }
+
+  .stats-details h3 {
+    font-size: 13px;
+  }
+
+  .stats-details-grid div {
+    font-size: 10px;
+    padding: 3px 0;
+  }
+
+  .stats-btn {
+    font-size: 11px;
+    padding: 6px 10px;
+    border-radius: 6px;
+  }
+
+  .history-box {
+    padding: 15px;
+    border-width: 2px;
+  }
+
+  .history-header h2 {
+    font-size: 16px;
+  }
+
+  .history-close {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+
+  .history-item {
+    padding: 6px 8px;
+    margin-bottom: 5px;
+    border-left-width: 3px;
+  }
+
+  .history-date {
+    font-size: 9px;
+  }
+
+  .history-result {
+    font-size: 10px;
+  }
+
+  .history-item-details {
+    font-size: 9px;
+    gap: 2px;
+  }
+
+  .history-close-btn {
+    font-size: 11px;
+    padding: 6px;
+  }
+
+  .history-empty p {
+    font-size: 13px;
+  }
+
+  .loading-spinner {
+    font-size: 16px;
+  }
+}
+
+/* ============================================================
+   ЭКРАН ОКОНЧАНИЯ ИГРЫ - УЛУЧШЕННЫЙ
+   ============================================================ */
+
+.game-over {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+  padding: 20px;
+}
+
+.game-over-content {
+  background: var(--bg-card);
+  border-radius: 24px;
+  padding: clamp(30px, 5vw, 50px);
+  max-width: 600px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 20px 60px var(--shadow-color);
+  border: 3px solid #6fbda8;
+  color: var(--text-primary);
+  animation: fadeIn 0.5s ease;
+}
+
+.game-over-icon {
+  font-size: clamp(56px, 8vw, 72px);
+  line-height: 1;
+}
+
+.game-over h1 {
+  font-size: clamp(28px, 4vw, 42px);
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+.game-over-result {
+  font-size: clamp(24px, 3vw, 34px);
+  font-weight: 700;
+  margin: 8px 0 12px 0;
+  font-family: 'Orbitron', sans-serif;
+  letter-spacing: 1px;
+}
+
+.game-over-reason {
+  font-size: clamp(14px, 1.5vw, 18px);
+  color: var(--text-secondary);
+  padding: 12px 20px;
+  background: var(--bg-rules);
+  border-radius: 12px;
+  max-width: 500px;
+  margin: 0 auto 15px auto;
+  line-height: 1.5;
+}
+
+.game-over-winner {
+  font-size: clamp(16px, 2vw, 22px);
+  font-weight: 700;
+  margin-bottom: 12px;
+  font-family: 'Orbitron', sans-serif;
+}
+
+.game-over-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 10px;
+  max-width: 500px;
+  margin: 15px auto;
+  padding: 15px 20px;
+  background: var(--bg-rules);
+  border-radius: 12px;
+}
+
+.game-over-stats .stat-item {
+  text-align: center;
+}
+
+.game-over-stats .stat-value {
+  font-size: clamp(18px, 2vw, 22px);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.game-over-stats .stat-label {
+  font-size: clamp(10px, 0.9vw, 12px);
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.game-over-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.game-over .btn-new-game {
+  padding: clamp(10px, 1.5vw, 14px) clamp(25px, 3vw, 35px);
+  font-size: clamp(14px, 1.5vw, 18px);
+  background: #6fbda8;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.game-over .btn-new-game:hover {
+  background: #4a8f7a;
+  transform: translateY(-3px);
+  box-shadow: 0 8px 30px rgba(111, 189, 168, 0.4);
+}
+
+.game-over .btn-stats {
+  padding: clamp(10px, 1.5vw, 14px) clamp(25px, 3vw, 35px);
+  font-size: clamp(14px, 1.5vw, 18px);
+  background: #3498db;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 600;
+}
+
+.game-over .btn-stats:hover {
+  background: #2980b9;
+  transform: translateY(-3px);
+  box-shadow: 0 8px 30px rgba(52, 152, 219, 0.4);
+}
+
+.game-over .return-timer {
+  margin-top: 18px;
+  color: var(--text-muted);
+  font-size: clamp(11px, 1vw, 14px);
+  opacity: 0.7;
+}
+
+/* Адаптивность для экрана окончания игры */
+@media (max-width: 480px) {
+  .game-over-content {
     padding: 20px 15px;
+  }
+
+  .game-over-stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    padding: 12px 15px;
+  }
+
+  .game-over-buttons {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .game-over .btn-new-game,
+  .game-over .btn-stats {
+    width: 100%;
+    max-width: 250px;
   }
 }

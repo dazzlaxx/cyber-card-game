@@ -460,15 +460,11 @@ export function clearCompanyTemporaryDefenses(company) {
 // ФУНКЦИЯ ПРОВЕРКИ ВОЗМОЖНОСТИ ХОДА
 // ============================================================
 
-/**
- * Проверяет, может ли игрок сделать ход.
- * @param {Object} gameState - текущее состояние игры
- * @param {Object} player - игрок
- * @returns {boolean} - может ли игрок сделать ход
- */
-export function canPlayerAct(gameState, player) {
-  if (!player || player.health <= 0) return false;
-
+export function canPlayerActCheck(gameState, player) {
+  if (!player) return false;
+  if (player.health <= 0) return false;
+  if (player.isAlive === false) return false;
+  
   // Проверяем, есть ли у игрока карты
   if (!player.hand || player.hand.length === 0) return false;
 
@@ -479,10 +475,6 @@ export function canPlayerAct(gameState, player) {
   }
 
   // Для компании: всегда может сделать ход (если есть карты)
-  if (player.role === 'company') {
-    return true;
-  }
-
   return true;
 }
 
@@ -502,32 +494,4 @@ export function revealCharacteristic(company, characteristic) {
 export function isCharacteristicRevealed(company, characteristic, isHuman) {
   if (!isHuman) return true;
   return company.revealedCharacteristics?.includes(characteristic) || false;
-}
-
-/**
- * Проверяет, может ли игрок совершить ход.
- * @param {Object} gameState - Текущее состояние игры.
- * @param {Object} player - Объект игрока.
- * @returns {boolean} - true, если игрок может сделать ход.
- */
-export function canPlayerAct(gameState, player) {
-    if (!player || player.health <= 0) return false;
-
-    // 1. Проверяем, есть ли у игрока карты
-    if (!player.hand || player.hand.length === 0) {
-        return false;
-    }
-
-    // 2. Для хакера проверяем, есть ли живые компании для атаки
-    if (player.role === 'hacker') {
-        const aliveCompanies = gameState.companies.filter(c => c.isAlive !== false && c.health > 0);
-        return aliveCompanies.length > 0;
-    }
-
-    // 3. Для компании всегда можно сделать ход, если есть карты
-    if (player.role === 'company') {
-        return true;
-    }
-
-    return true;
 }
