@@ -148,7 +148,7 @@ npm install
 
 # 4. Запустите в режиме разработки
 npm run dev
-
+```
 
 ## 🎯 Как играть
 
@@ -223,6 +223,7 @@ npm run dev
 - Светлый вариант: `#a8d5c4`
 
 ## 📁 Структура проекта
+```
 cyber-card-game/
 ├── src/
 │   ├── components/
@@ -255,7 +256,7 @@ cyber-card-game/
 ├── package.json              # Зависимости
 ├── vite.config.js            # Конфигурация Vite
 └── README.md                 # Документация
-
+```
 
 ---
 
@@ -275,6 +276,7 @@ cyber-card-game/
 
 ```bash
 npm run build #Собранные файлы появятся в папке dist/.
+```
 
 ## 📊 Системные требования
 
