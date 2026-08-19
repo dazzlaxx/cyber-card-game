@@ -15,25 +15,31 @@ export function Card({ card, type, onClick, isSelected }) {
     return '#dfe6e9';
   };
 
-  // Функция для перевода значения характеристики на русский
   const getCharacteristicValue = (value) => {
     if (value === 'high') return '⬆️ Высокая';
     if (value === 'low') return '⬇️ Низкая';
     return value;
   };
 
-  // Функция для получения цвета значения характеристики
   const getCharacteristicColor = (value) => {
     if (value === 'high') return '#27ae60';
     if (value === 'low') return '#e74c3c';
     return '#95a5a6';
   };
 
-  // Функция для получения фона значения характеристики
   const getCharacteristicBg = (value) => {
     if (value === 'high') return '#e8f5e9';
     if (value === 'low') return '#ffebee';
     return '#f5f5f5';
+  };
+
+  // Проверяем, защищена ли характеристика
+  const isCharacteristicDefended = (company, characteristic) => {
+    if (type !== 'company') return false;
+    const permanentDefenses = company.permanentDefenses || [];
+    const temporaryDefenses = company.temporaryDefenses || [];
+    return permanentDefenses.some(d => d?.characteristic === characteristic) ||
+           temporaryDefenses.some(d => d?.characteristic === characteristic);
   };
 
   return (
@@ -82,11 +88,14 @@ export function Card({ card, type, onClick, isSelected }) {
       {type === 'company' && card.characteristics && (
         <div style={{ fontSize: '11px', marginTop: '8px' }}>
           {Object.entries(card.characteristics).map(([key, value]) => {
-            // Проверяем, раскрыта ли характеристика
             const isRevealed = !card.hideCharacteristics ||
                               (card.revealedCharacteristics && card.revealedCharacteristics.includes(key));
+            
+            // Проверяем, защищена ли характеристика
+            const defended = isCharacteristicDefended(card, key);
+            const defenseType = card.permanentDefenses?.some(d => d?.characteristic === key) ? '🛡️ Постоянная' :
+                               card.temporaryDefenses?.some(d => d?.characteristic === key) ? '🛡️ Временная' : '';
 
-            // Если характеристики скрыты И характеристика не раскрыта
             if (card.hideCharacteristics && !isRevealed) {
               return (
                 <div key={key} style={{
@@ -102,15 +111,27 @@ export function Card({ card, type, onClick, isSelected }) {
               );
             }
 
-            // Показываем раскрытую характеристику на РУССКОМ
             return (
               <div key={key} style={{ 
                 display: 'flex', 
                 justifyContent: 'space-between', 
                 marginBottom: '3px',
+                alignItems: 'center',
                 animation: card.hideCharacteristics && isRevealed ? 'fadeIn 0.5s ease' : 'none'
               }}>
-                <span>{characteristicIcons[key] || '📊'} {characteristicNames[key]}:</span>
+                <span>
+                  {characteristicIcons[key] || '📊'} {characteristicNames[key]}:
+                  {defended && (
+                    <span style={{ 
+                      marginLeft: '4px',
+                      fontSize: '11px',
+                      color: '#f39c12',
+                      fontWeight: 'bold'
+                    }}>
+                      {defenseType}
+                    </span>
+                  )}
+                </span>
                 <span style={{
                   color: getCharacteristicColor(value),
                   fontWeight: 'bold',

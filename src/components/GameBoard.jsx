@@ -1,3 +1,4 @@
+// src/components/GameBoard.jsx
 // ============================================================
 // ГЛАВНЫЙ КОМПОНЕНТ ИГРЫ
 // ============================================================
@@ -224,6 +225,34 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
   // ============================================================
   const checkGameOver = useCallback((state) => {
     const newState = { ...state };
+
+    // Проверяем, жив ли игрок-человек
+    const humanPlayer = newState.hackers.find(h => h.isHuman) || newState.companies.find(c => c.isHuman);
+    
+    if (humanPlayer && (humanPlayer.health <= 0 || humanPlayer.isAlive === false)) {
+      // Если игрок умер — игра заканчивается
+      newState.gameOver = true;
+      const isHacker = humanPlayer.role === 'hacker';
+      newState.winner = isHacker ? 'companies' : 'hackers';
+      
+      if (!newState.gameOverAdded) {
+        newState.gameOverAdded = true;
+        addLogMessage(`💀 ${humanPlayer.name} погиб! Игра окончена.`);
+        addGame({
+          role: roleSelection,
+          won: false,
+          damageDealt: currentGameData.damageDealt,
+          damageTaken: currentGameData.damageTaken,
+          cardsUsed: currentGameData.cardsUsed,
+          defensesUsed: currentGameData.defensesUsed,
+          rounds: newState.currentTurn + 1,
+          opponent: 'Боты',
+          mode: gameMode
+        });
+        setIsGameFinished(true);
+      }
+      return newState;
+    }
 
     // Проверяем, есть ли живые игроки
     const aliveHackers = newState.hackers.filter(h => h.isAlive !== false && h.health > 0);
@@ -876,7 +905,31 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
     );
   }
 
+  // ===== ЭКРАН ОКОНЧАНИЯ ИГРЫ =====
   if (gameState?.gameOver) {
+    // Автоматический возврат на главный экран через 5 секунд
+    useEffect(() => {
+      const timer = setTimeout(() => {
+        setRoleSelection(null);
+        setGameState(null);
+        setGameLog([]);
+        setSelectedAttackCard(null);
+        setSelectedCompany(null);
+        setSelectedDefenseCard(null);
+        setCurrentGameData({
+          damageDealt: 0,
+          damageTaken: 0,
+          cardsUsed: 0,
+          defensesUsed: 0,
+          rounds: 0
+        });
+        setIsGameFinished(false);
+        processingRef.current = false;
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }, []);
+
     return (
       <div className="game-over" data-theme={theme}>
         <h1>🏁 Игра окончена!</h1>
@@ -906,6 +959,9 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
         }}>
           🔄 Новая игра
         </button>
+        <p style={{ marginTop: '15px', color: 'var(--text-muted)', fontSize: '14px' }}>
+          ⏳ Возврат на главный экран через 5 секунд...
+        </p>
       </div>
     );
   }
@@ -913,6 +969,7 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
   const currentPlayer = getCurrentPlayer(gameState);
   const isHumanTurn = currentPlayer?.isHuman && !isProcessing && !gameState?.gameOver;
 
+  // ===== ОСНОВНОЙ ЭКРАН ИГРЫ =====
   return (
     <div className="container" data-theme={theme}>
       <div className="top-panel">
