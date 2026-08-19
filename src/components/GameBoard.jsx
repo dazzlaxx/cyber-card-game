@@ -102,8 +102,12 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
   const [roleSelection, setRoleSelection] = useState(null);
   const [gameMode, setGameMode] = useState('normal');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [hasActedThisTurn, setHasActedThisTurn] = useState(false);
   const processingRef = useRef(false);
   const timeoutRef = useRef(null);
+
+  // ===== ПРИНУДИТЕЛЬНОЕ ОБНОВЛЕНИЕ СТАТИСТИКИ =====
+  const [, forceUpdate] = useState({});
 
   // ===== СОСТОЯНИЯ СТАТИСТИКИ =====
   const { stats, addGame, clearStats } = useGameStats();
@@ -117,6 +121,13 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
     rounds: 0
   });
   const [isGameFinished, setIsGameFinished] = useState(false);
+
+  // ============================================================
+  // ФУНКЦИЯ ДЛЯ ПРИНУДИТЕЛЬНОГО ОБНОВЛЕНИЯ СТАТИСТИКИ
+  // ============================================================
+  const refreshStats = useCallback(() => {
+    forceUpdate({});
+  }, []);
 
   // ============================================================
   // СИНХРОНИЗАЦИЯ ТЕМЫ
@@ -161,13 +172,15 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
           rounds: 0
         });
         setIsGameFinished(false);
+        setHasActedThisTurn(false);
         processingRef.current = false;
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        refreshStats();
       }, 5000);
 
       return () => clearTimeout(timer);
     }
-  }, [gameState?.gameOver]);
+  }, [gameState?.gameOver, refreshStats]);
 
   // ============================================================
   // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -213,6 +226,8 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
         rounds: 0
       });
       setIsGameFinished(false);
+      setHasActedThisTurn(false);
+      refreshStats();
       return;
     }
 
@@ -228,6 +243,7 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
         opponent: 'Боты',
         mode: gameMode
       });
+      refreshStats();
 
       setRoleSelection(null);
       setGameState(null);
@@ -244,6 +260,7 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
         rounds: 0
       });
       setIsGameFinished(false);
+      setHasActedThisTurn(false);
     }
   };
 
@@ -260,7 +277,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
     // Проверяем, жив ли игрок-человек
     const humanPlayer = newState.hackers.find(h => h.isHuman) || newState.companies.find(c => c.isHuman);
     
-    // Если игрок-человек мёртв или его нет в списке — игра окончена
     if (!humanPlayer) {
       newState.gameOver = true;
       const isHackerRole = roleSelection === 'hacker';
@@ -280,6 +296,7 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
           opponent: 'Боты',
           mode: gameMode
         });
+        refreshStats();
         setIsGameFinished(true);
       }
       return newState;
@@ -308,6 +325,7 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
           opponent: 'Боты',
           mode: gameMode
         });
+        refreshStats();
         setIsGameFinished(true);
       }
       return newState;
@@ -333,6 +351,7 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
           opponent: 'Боты',
           mode: gameMode
         });
+        refreshStats();
         setIsGameFinished(true);
       }
       return newState;
@@ -358,13 +377,14 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
           opponent: 'Боты',
           mode: gameMode
         });
+        refreshStats();
         setIsGameFinished(true);
       }
       return newState;
     }
 
     return newState;
-  }, [addLogMessage, roleSelection, addGame, currentGameData, gameMode]);
+  }, [addLogMessage, roleSelection, addGame, currentGameData, gameMode, refreshStats]);
 
   // ============================================================
   // ВЫПОЛНЕНИЕ ХОДА БОТА
@@ -604,6 +624,7 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       rounds: 0
     });
     setIsGameFinished(false);
+    setHasActedThisTurn(false);
 
     setGameState(newGame);
     setRoleSelection(role);
@@ -614,6 +635,7 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
     setMessage(`Игра началась! Вы играете за ${role === 'hacker' ? 'Хакера' : 'Компанию'} (${mode === 'fast' ? 'Быстрый режим' : 'Обычный режим'})`);
     addLogMessage(`Игра началась! Роль: ${role === 'hacker' ? 'Хакер' : 'Компания'}, Режим: ${mode === 'fast' ? 'Быстрый' : 'Обычный'}`);
     addLogMessage(`--- РАУНД 1 ---`);
+    refreshStats();
   };
 
   const endTurn = () => {
@@ -624,6 +646,9 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       setMessage('Сейчас не ваш ход!');
       return;
     }
+
+    // Сбрасываем флаг действия в этом ходу
+    setHasActedThisTurn(false);
 
     const newState = deepCopyGameState(gameState);
 
@@ -649,6 +674,7 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       addLogMessage(`💀 Игрок погиб! Игра окончена.`);
       setGameState(newState);
       setMessage('Игра окончена! Вы погибли.');
+      refreshStats();
       return;
     }
 
@@ -661,6 +687,7 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       addLogMessage('🏆 ХАКЕРЫ ПОБЕДИЛИ! Все компании уничтожены.');
       setGameState(newState);
       setMessage('Игра окончена! Хакеры победили!');
+      refreshStats();
       return;
     }
 
@@ -670,6 +697,7 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       addLogMessage('🏆 КОМПАНИИ ПОБЕДИЛИ! Все хакеры уничтожены.');
       setGameState(newState);
       setMessage('Игра окончена! Компании победили!');
+      refreshStats();
       return;
     }
 
@@ -699,6 +727,12 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       return;
     }
 
+    // ===== ПРОВЕРКА: УЖЕ ИСПОЛЬЗОВАЛ КАРТУ В ЭТОМ ХОДУ =====
+    if (hasActedThisTurn) {
+      setMessage('⚠️ Вы уже использовали карту в этом ходу!');
+      return;
+    }
+
     if (!selectedAttackCard || !selectedCompany) {
       setMessage('Выберите карту атаки и компанию');
       return;
@@ -724,6 +758,8 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       addLogMessage(`❌ ${selectedAttackCard.name} -> ${selectedCompany.name}: ${result.message}`);
     }
 
+    // ===== БЛОКИРУЕМ ДАЛЬНЕЙШИЙ ВЫБОР =====
+    setHasActedThisTurn(true);
     const afterAttackState = checkGameOver(newState);
     setGameState(afterAttackState);
     setMessage(result.message);
@@ -737,6 +773,12 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
 
     const currentPlayer = getCurrentPlayer(gameState);
     if (!currentPlayer || !currentPlayer.isHuman) return;
+
+    // ===== ПРОВЕРКА: УЖЕ ИСПОЛЬЗОВАЛ КАРТУ В ЭТОМ ХОДУ =====
+    if (hasActedThisTurn) {
+      setMessage('⚠️ Вы уже использовали карту в этом ходу!');
+      return;
+    }
 
     let newState = deepCopyGameState(gameState);
     const result = executeAttack(newState, currentPlayer.id, selectedCompany.id, choosingCharacteristic, characteristic);
@@ -753,6 +795,8 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       addLogMessage(`❌ ${choosingCharacteristic.name} -> ${selectedCompany.name}: ${result.message}`);
     }
 
+    // ===== БЛОКИРУЕМ ДАЛЬНЕЙШИЙ ВЫБОР =====
+    setHasActedThisTurn(true);
     const afterAttackState = checkGameOver(newState);
     setGameState(afterAttackState);
     setMessage(result.message);
@@ -767,6 +811,12 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
     const currentPlayer = getCurrentPlayer(gameState);
     if (!currentPlayer || !currentPlayer.isHuman) {
       setMessage('Сейчас не ваш ход!');
+      return;
+    }
+
+    // ===== ПРОВЕРКА: УЖЕ ИСПОЛЬЗОВАЛ КАРТУ В ЭТОМ ХОДУ =====
+    if (hasActedThisTurn) {
+      setMessage('⚠️ Вы уже использовали карту в этом ходу!');
       return;
     }
 
@@ -793,6 +843,8 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       addLogMessage(`🛡️ ${selectedDefenseCard.name} активирована для ${company.name}`);
     }
 
+    // ===== БЛОКИРУЕМ ДАЛЬНЕЙШИЙ ВЫБОР =====
+    setHasActedThisTurn(true);
     setGameState(checkGameOver(newState));
     setMessage(result.message);
     setSelectedDefenseCard(null);
@@ -807,6 +859,12 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       return;
     }
 
+    // ===== ПРОВЕРКА: УЖЕ ИСПОЛЬЗОВАЛ КАРТУ В ЭТОМ ХОДУ =====
+    if (hasActedThisTurn) {
+      setMessage('⚠️ Вы уже использовали карту в этом ходу!');
+      return;
+    }
+
     if (roleSelection === 'company') {
       const charValue = currentPlayer.characteristics?.[card.characteristic];
       if (charValue === 'high') {
@@ -814,6 +872,7 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
         const result = discardAndDraw(newState, 'company', currentPlayer.id, card.id);
         newState = result.gameState;
         setGameState(newState);
+        // Бесплатный сброс НЕ блокирует ход
         addLogMessage(`🔄 Карта ${card.name} сброшена бесплатно (высокая характеристика)`);
         setMessage('Карта сброшена бесплатно');
         return;
@@ -827,6 +886,8 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
 
     if (result.success) {
       setGameState(newState);
+      // ===== БЛОКИРУЕМ ДАЛЬНЕЙШИЙ ВЫБОР =====
+      setHasActedThisTurn(true);
       addLogMessage(`🔄 ${card.name} сброшена и заменена`);
       setMessage(result.message);
     } else {
@@ -1025,8 +1086,10 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
                 rounds: 0
               });
               setIsGameFinished(false);
+              setHasActedThisTurn(false);
               processingRef.current = false;
               if (timeoutRef.current) clearTimeout(timeoutRef.current);
+              refreshStats();
             }}>
               🔄 Новая игра
             </button>
@@ -1073,6 +1136,11 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
 
       <div className="message-bar">
         <strong>{message || (isHumanTurn ? '🎯 Ваш ход! Выберите действие' : (isProcessing ? '🤖 Ход бота...' : 'Ожидание...'))}</strong>
+        {isHumanTurn && hasActedThisTurn && (
+          <span style={{ color: '#f39c12', marginLeft: '10px' }}>
+            ⚠️ Вы уже использовали карту в этом ходу
+          </span>
+        )}
       </div>
 
       <h2 style={{ color: 'var(--text-white)', marginBottom: '15px', textShadow: '0 2px 10px rgba(0,0,0,0.3)' }}>
@@ -1086,8 +1154,10 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
             onClick={() => {
               if (isHumanTurn && roleSelection === 'hacker' && !selectedAttackCard) {
                 setMessage('Сначала выберите карту атаки');
-              } else if (isHumanTurn && roleSelection === 'hacker' && selectedAttackCard) {
+              } else if (isHumanTurn && roleSelection === 'hacker' && selectedAttackCard && !hasActedThisTurn) {
                 setSelectedCompany(company);
+              } else if (isHumanTurn && roleSelection === 'hacker' && hasActedThisTurn) {
+                setMessage('⚠️ Вы уже использовали карту в этом ходу!');
               }
             }}
           >
@@ -1135,6 +1205,10 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
               type="attack"
               title="🗡️ ВАШИ КАРТЫ АТАК"
               onCardClick={(card) => {
+                if (hasActedThisTurn) {
+                  setMessage('⚠️ Вы уже использовали карту в этом ходу!');
+                  return;
+                }
                 if (selectedAttackCard?.id === card.id) {
                   setSelectedAttackCard(null);
                   setSelectedCompany(null);
@@ -1155,6 +1229,10 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
               type="defense"
               title="🛡️ ВАШИ КАРТЫ ЗАЩИТЫ"
               onCardClick={(card) => {
+                if (hasActedThisTurn) {
+                  setMessage('⚠️ Вы уже использовали карту в этом ходу!');
+                  return;
+                }
                 if (selectedDefenseCard?.id === card.id) {
                   setSelectedDefenseCard(null);
                 } else {
@@ -1171,25 +1249,46 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
           <div className="action-panel">
             <div className="actions-row">
               {roleSelection === 'hacker' && (
-                <button className="btn-attack" onClick={handleAttack} disabled={!selectedAttackCard || !selectedCompany}>
+                <button
+                  className="btn-attack"
+                  onClick={handleAttack}
+                  disabled={!selectedAttackCard || !selectedCompany || hasActedThisTurn}
+                >
                   ⚔️ АТАКОВАТЬ
                 </button>
               )}
+
               {roleSelection === 'company' && (
-                <button className="btn-defense" onClick={handleUseDefense} disabled={!selectedDefenseCard}>
+                <button
+                  className="btn-defense"
+                  onClick={handleUseDefense}
+                  disabled={!selectedDefenseCard || hasActedThisTurn}
+                >
                   🛡️ ЗАЩИТИТЬ
                 </button>
               )}
-              <button className="btn-clear" onClick={() => {
-                setSelectedAttackCard(null);
-                setSelectedDefenseCard(null);
-                setSelectedCompany(null);
-                setMessage('Выбор очищен');
-              }}>
+
+              <button
+                className="btn-clear"
+                onClick={() => {
+                  if (!hasActedThisTurn) {
+                    setSelectedAttackCard(null);
+                    setSelectedDefenseCard(null);
+                    setSelectedCompany(null);
+                    setMessage('Выбор очищен');
+                  } else {
+                    setMessage('⚠️ Вы уже использовали карту в этом ходу!');
+                  }
+                }}
+              >
                 🗑️ Очистить
               </button>
             </div>
-            <button className="btn-end-turn" onClick={endTurn}>
+
+            <button
+              className="btn-end-turn"
+              onClick={endTurn}
+            >
               ⏭️ ЗАВЕРШИТЬ ХОД
             </button>
           </div>
@@ -1246,6 +1345,7 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
           onClear={() => {
             if (window.confirm('Вы уверены, что хотите очистить всю статистику?')) {
               clearStats();
+              refreshStats();
             }
           }}
           theme={theme}

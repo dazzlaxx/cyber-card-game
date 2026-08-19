@@ -1,4 +1,6 @@
+// ============================================================
 // ХУК ДЛЯ УПРАВЛЕНИЯ СТАТИСТИКОЙ ИГРОКА
+// ============================================================
 
 import { useState, useEffect } from 'react';
 
@@ -47,7 +49,7 @@ export function useGameStats() {
 
   // Добавить новую игру
   const addGame = (gameData) => {
-    const { role, won, damageDealt, damageTaken, cardsUsed, defensesUsed, rounds, opponent } = gameData;
+    const { role, won, damageDealt, damageTaken, cardsUsed, defensesUsed, rounds, opponent, mode } = gameData;
 
     setStats(prev => {
       const newStats = { ...prev };
@@ -86,7 +88,8 @@ export function useGameStats() {
         cardsUsed: cardsUsed || 0,
         defensesUsed: defensesUsed || 0,
         rounds: rounds || 0,
-        opponent: opponent || 'Боты'
+        opponent: opponent || 'Боты',
+        mode: mode || 'normal'
       });
 
       // Ограничиваем историю 50 играми
