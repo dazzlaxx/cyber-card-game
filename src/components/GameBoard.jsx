@@ -13,7 +13,8 @@ import {
   useDefenseCard,
   discardAndDraw,
   clearCompanyTemporaryDefenses,
-  checkDefense
+  checkDefense,
+  canPlayerAct
 } from '../game/gameLogic';
 import { createHackerBot, createCompanyBot } from '../game/botLogic';
 import { characteristicNames, characteristicIcons } from '../data/characteristics';
@@ -25,10 +26,8 @@ import { useGameStats } from '../hooks/useGameStats';
 const deepCopyGameState = (state) => {
   if (!state) return null;
 
-  // Копируем компании с восстановлением методов ботов
   const copiedCompanies = state.companies.map(company => {
     if (company.isHuman) {
-      // Человек-компания - просто копируем
       return {
         ...company,
         hand: [...(company.hand || [])],
@@ -38,7 +37,6 @@ const deepCopyGameState = (state) => {
         hideCharacteristics: company.hideCharacteristics
       };
     } else {
-      // Бот-компания - создаём заново через фабрику
       const bot = createCompanyBot(
         {
           id: company.id,
@@ -47,7 +45,6 @@ const deepCopyGameState = (state) => {
         },
         company.difficulty || 'medium'
       );
-      // Восстанавливаем состояние
       bot.health = company.health;
       bot.hand = [...(company.hand || [])];
       bot.permanentDefenses = [...(company.permanentDefenses || [])];
@@ -59,23 +56,19 @@ const deepCopyGameState = (state) => {
     }
   });
 
-  // Копируем хакеров с восстановлением методов ботов
   const copiedHackers = state.hackers.map(hacker => {
     if (hacker.isHuman) {
-      // Человек-хакер - просто копируем
       return {
         ...hacker,
         hand: [...(hacker.hand || [])]
       };
     } else {
-      // Бот-хакер - создаём заново через фабрику
       const botId = hacker.id.replace('hacker_bot_', '');
       const bot = createHackerBot(
         botId || '1',
         hacker.name,
         hacker.difficulty || 'medium'
       );
-      // Восстанавливаем состояние
       bot.health = hacker.health;
       bot.hand = [...(hacker.hand || [])];
       bot.isAlive = hacker.isAlive;
@@ -83,7 +76,6 @@ const deepCopyGameState = (state) => {
     }
   });
 
-  // Возвращаем новое состояние
   return {
     ...state,
     companies: copiedCompanies,
@@ -113,31 +105,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
   const processingRef = useRef(false);
   const timeoutRef = useRef(null);
 
-// Синхронизация темы при монтировании и изменении
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('cyberGameTheme', theme);
-  }, [theme]);
-
-  // Слушаем события смены темы из других компонентов
-  useEffect(() => {
-    const handleThemeChange = (e) => {
-      if (e.detail && e.detail.theme) {
-        // Обновляем тему через пропс
-        if (toggleTheme) {
-          // Принудительно обновляем, если тема отличается
-          const currentTheme = document.documentElement.getAttribute('data-theme');
-          if (currentTheme !== e.detail.theme) {
-            document.documentElement.setAttribute('data-theme', e.detail.theme);
-            localStorage.setItem('cyberGameTheme', e.detail.theme);
-          }
-        }
-      }
-    };
-    window.addEventListener('themeChanged', handleThemeChange);
-    return () => window.removeEventListener('themeChanged', handleThemeChange);
-  }, [toggleTheme]);
-
   // ===== СОСТОЯНИЯ СТАТИСТИКИ =====
   const { stats, addGame, clearStats } = useGameStats();
   const [showStats, setShowStats] = useState(false);
@@ -150,6 +117,29 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
     rounds: 0
   });
   const [isGameFinished, setIsGameFinished] = useState(false);
+
+  // ============================================================
+  // СИНХРОНИЗАЦИЯ ТЕМЫ
+  // ============================================================
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('cyberGameTheme', theme);
+  }, [theme]);
+
+  useEffect(() => {
+    const handleThemeChange = (e) => {
+      if (e.detail && e.detail.theme) {
+        const currentTheme = document.documentElement.getAttribute('data-theme');
+        if (currentTheme !== e.detail.theme) {
+          document.documentElement.setAttribute('data-theme', e.detail.theme);
+          localStorage.setItem('cyberGameTheme', e.detail.theme);
+        }
+      }
+    };
+    window.addEventListener('themeChanged', handleThemeChange);
+    return () => window.removeEventListener('themeChanged', handleThemeChange);
+  }, []);
 
   // ============================================================
   // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -235,7 +225,11 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
   const checkGameOver = useCallback((state) => {
     const newState = { ...state };
 
-    if (newState.hackers.length === 0) {
+    // Проверяем, есть ли живые игроки
+    const aliveHackers = newState.hackers.filter(h => h.isAlive !== false && h.health > 0);
+    const aliveCompanies = newState.companies.filter(c => c.isAlive !== false && c.health > 0);
+
+    if (aliveHackers.length === 0) {
       newState.gameOver = true;
       newState.winner = 'companies';
       addLogMessage('🏆 КОМПАНИИ ПОБЕДИЛИ! Все хакеры уничтожены.');
@@ -269,8 +263,10 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
         });
         setIsGameFinished(true);
       }
+      return newState;
+    }
 
-    } else if (newState.companies.length === 0) {
+    if (aliveCompanies.length === 0) {
       newState.gameOver = true;
       newState.winner = 'hackers';
       addLogMessage('🏆 ХАКЕРЫ ПОБЕДИЛИ! Все компании уничтожены.');
@@ -304,6 +300,22 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
         });
         setIsGameFinished(true);
       }
+      return newState;
+    }
+
+    // Проверяем, может ли текущий игрок сделать ход
+    const currentPlayer = getCurrentPlayer(newState);
+    if (currentPlayer && !canPlayerAct(newState, currentPlayer)) {
+      addLogMessage(`⚠️ ${currentPlayer.name} не может сделать ход! Ход пропущен.`);
+      // Переход к следующему игроку
+      const totalPlayers = newState.hackers.length + newState.companies.length;
+      if (totalPlayers > 0) {
+        newState.currentPlayerIndex = (newState.currentPlayerIndex + 1) % totalPlayers;
+        if (newState.currentPlayerIndex === 0) {
+          newState.currentTurn++;
+          addLogMessage(`--- РАУНД ${newState.currentTurn + 1} ---`);
+        }
+      }
     }
 
     return newState;
@@ -335,10 +347,36 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
 
     try {
       if (currentPlayer.role === 'hacker') {
-        // === ХОД ХАКЕРА-БОТА ===
         const aliveCompanies = newState.companies.filter(c => c.isAlive !== false && c.health > 0);
 
-        if (aliveCompanies.length > 0 && currentPlayer.chooseTarget) {
+        // Проверка: если нет живых компаний
+        if (aliveCompanies.length === 0) {
+          addLogMessage(`🏆 КОМПАНИИ ПОБЕДИЛИ! Все компании уничтожены.`);
+          newState.gameOver = true;
+          newState.winner = 'companies';
+          processingRef.current = false;
+          setIsProcessing(false);
+          return newState;
+        }
+
+        // Проверка: есть ли у бота карты
+        if (currentPlayer.hand.length === 0) {
+          addLogMessage(`⚠️ У ${currentPlayer.name} нет карт! Ход пропущен.`);
+          // Переход к следующему игроку
+          const totalPlayers = newState.hackers.length + newState.companies.length;
+          if (totalPlayers > 0) {
+            newState.currentPlayerIndex = (newState.currentPlayerIndex + 1) % totalPlayers;
+            if (newState.currentPlayerIndex === 0) {
+              newState.currentTurn++;
+              addLogMessage(`--- РАУНД ${newState.currentTurn + 1} ---`);
+            }
+          }
+          processingRef.current = false;
+          setIsProcessing(false);
+          return newState;
+        }
+
+        if (currentPlayer.chooseTarget) {
           const targetCompany = currentPlayer.chooseTarget(aliveCompanies);
 
           if (targetCompany && currentPlayer.chooseAttackCard) {
@@ -346,7 +384,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
 
             if (decision) {
               if (decision.action === 'discard') {
-                // Сброс карты
                 const cardIndex = currentPlayer.hand.findIndex(c => c.id === decision.card.id);
                 if (cardIndex !== -1) {
                   const discarded = currentPlayer.hand[cardIndex];
@@ -356,7 +393,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
                   addLogMessage(`🤖 ${currentPlayer.name} сбросил карту ${discarded.name}`);
                 }
               } else {
-                // Атака
                 let selectedChar = null;
 
                 if (decision.card.type === 'choose' && targetCompany.characteristics) {
@@ -375,7 +411,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
                 const result = executeAttack(newState, currentPlayer.id, targetCompany.id, decision.card, selectedChar);
                 newState = result.gameState;
 
-                // Обновляем статистику урона
                 if (result.success) {
                   setCurrentGameData(prev => ({
                     ...prev,
@@ -387,21 +422,22 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
                   addLogMessage(`🤖 ${currentPlayer.name} атакует ${targetCompany.name}: ${result.message}`);
                 }
               }
+            } else {
+              addLogMessage(`⚠️ ${currentPlayer.name} не может выбрать карту! Ход пропущен.`);
             }
+          } else {
+            addLogMessage(`⚠️ ${currentPlayer.name} не может выбрать цель! Ход пропущен.`);
           }
         }
       } else if (currentPlayer.role === 'company') {
-        // === ХОД КОМПАНИИ-БОТА ===
         const company = newState.companies.find(c => c.id === currentPlayer.id);
 
-        // Снимаем временные защиты
         if (company && company.temporaryDefenses && company.temporaryDefenses.length > 0) {
           const clearedNames = company.temporaryDefenses.map(d => d.name).join(', ');
           company.temporaryDefenses = [];
           addLogMessage(`🏢 ${company.name}: сняты временные защиты: ${clearedNames}`);
         }
 
-        // Выбираем карту защиты
         if (currentPlayer.chooseDefenseCard) {
           const defenseCard = currentPlayer.chooseDefenseCard();
 
@@ -426,12 +462,36 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
                 addLogMessage(`🏢 ${currentPlayer.name} активировал защиту: ${defenseCard.name}`);
               }
             }
+          } else {
+            addLogMessage(`⚠️ ${currentPlayer.name} не может выбрать защиту! Ход пропущен.`);
           }
         }
       }
     } catch (error) {
       console.error('Bot turn error:', error);
       addLogMessage(`⚠️ Ошибка при ходе бота ${currentPlayer.name}`);
+    }
+
+    // Проверка на окончание игры после хода
+    const aliveCompanies = newState.companies.filter(c => c.isAlive !== false && c.health > 0);
+    const aliveHackers = newState.hackers.filter(h => h.isAlive !== false && h.health > 0);
+
+    if (aliveCompanies.length === 0) {
+      newState.gameOver = true;
+      newState.winner = 'hackers';
+      addLogMessage('🏆 ХАКЕРЫ ПОБЕДИЛИ! Все компании уничтожены.');
+      processingRef.current = false;
+      setIsProcessing(false);
+      return newState;
+    }
+
+    if (aliveHackers.length === 0) {
+      newState.gameOver = true;
+      newState.winner = 'companies';
+      addLogMessage('🏆 КОМПАНИИ ПОБЕДИЛИ! Все хакеры уничтожены.');
+      processingRef.current = false;
+      setIsProcessing(false);
+      return newState;
     }
 
     // Переход к следующему игроку
@@ -482,7 +542,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
   const startNewGame = (role, mode = 'normal') => {
     const newGame = initializeGameWithBots(role, 4, 2, mode);
 
-    // Скрываем характеристики компаний для хакера
     if (role === 'hacker') {
       newGame.companies.forEach(company => {
         company.hideCharacteristics = true;
@@ -494,7 +553,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       });
     }
 
-    // Сбрасываем статистику текущей игры
     setCurrentGameData({
       damageDealt: 0,
       damageTaken: 0,
@@ -526,7 +584,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
 
     const newState = deepCopyGameState(gameState);
 
-    // Снимаем временные защиты у компании-игрока
     if (currentPlayer.role === 'company') {
       const company = newState.companies.find(c => c.id === currentPlayer.id);
       if (company && company.temporaryDefenses && company.temporaryDefenses.length > 0) {
@@ -534,6 +591,28 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
         company.temporaryDefenses = [];
         addLogMessage(`🏢 ${company.name}: сняты временные защиты: ${clearedNames}`);
       }
+    }
+
+    // Проверка на окончание игры
+    const aliveCompanies = newState.companies.filter(c => c.isAlive !== false && c.health > 0);
+    const aliveHackers = newState.hackers.filter(h => h.isAlive !== false && h.health > 0);
+
+    if (aliveCompanies.length === 0) {
+      newState.gameOver = true;
+      newState.winner = 'hackers';
+      addLogMessage('🏆 ХАКЕРЫ ПОБЕДИЛИ! Все компании уничтожены.');
+      setGameState(newState);
+      setMessage('Игра окончена! Хакеры победили!');
+      return;
+    }
+
+    if (aliveHackers.length === 0) {
+      newState.gameOver = true;
+      newState.winner = 'companies';
+      addLogMessage('🏆 КОМПАНИИ ПОБЕДИЛИ! Все хакеры уничтожены.');
+      setGameState(newState);
+      setMessage('Игра окончена! Компании победили!');
+      return;
     }
 
     const totalPlayers = newState.hackers.length + newState.companies.length;
@@ -577,7 +656,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
     const result = executeAttack(newState, currentPlayer.id, selectedCompany.id, selectedAttackCard);
     newState = result.gameState;
 
-    // Обновляем статистику
     if (result.success) {
       setCurrentGameData(prev => ({
         ...prev,
@@ -607,7 +685,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
     const result = executeAttack(newState, currentPlayer.id, selectedCompany.id, choosingCharacteristic, characteristic);
     newState = result.gameState;
 
-    // Обновляем статистику
     if (result.success) {
       setCurrentGameData(prev => ({
         ...prev,
@@ -673,7 +750,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       return;
     }
 
-    // Бесплатный сброс для компании на высокую характеристику
     if (roleSelection === 'company') {
       const charValue = currentPlayer.characteristics?.[card.characteristic];
       if (charValue === 'high') {
@@ -705,7 +781,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
   // РЕНДЕРИНГ
   // ============================================================
 
-  // === ЭКРАН ВЫБОРА РОЛИ ===
   if (!roleSelection) {
     return (
       <div className="role-select" data-theme={theme}>
@@ -713,7 +788,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
         <p className="subtitle">Выберите сторону в кибервойне</p>
 
         <div className="role-select-container">
-          {/* ===== КАРТОЧКА ХАКЕРА ===== */}
           <div className="role-card-wrapper">
             <div className="role-card role-hacker-card">
               <div className="role-card-header">🕵️</div>
@@ -729,23 +803,16 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
                 </ul>
               </div>
               <div className="role-modes">
-                <button 
-                  className="mode-btn mode-normal" 
-                  onClick={() => startNewGame('hacker', 'normal')}
-                >
+                <button className="mode-btn mode-normal" onClick={() => startNewGame('hacker', 'normal')}>
                   ⚡ Обычный режим
                 </button>
-                <button 
-                  className="mode-btn mode-fast" 
-                  onClick={() => startNewGame('hacker', 'fast')}
-                >
+                <button className="mode-btn mode-fast" onClick={() => startNewGame('hacker', 'fast')}>
                   🚀 Быстрый режим
                 </button>
               </div>
             </div>
           </div>
 
-          {/* ===== КАРТОЧКА КОМПАНИИ ===== */}
           <div className="role-card-wrapper">
             <div className="role-card role-company-card">
               <div className="role-card-header">🏢</div>
@@ -761,16 +828,10 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
                 </ul>
               </div>
               <div className="role-modes">
-                <button 
-                  className="mode-btn mode-normal" 
-                  onClick={() => startNewGame('company', 'normal')}
-                >
+                <button className="mode-btn mode-normal" onClick={() => startNewGame('company', 'normal')}>
                   ⚡ Обычный режим
                 </button>
-                <button 
-                  className="mode-btn mode-fast" 
-                  onClick={() => startNewGame('company', 'fast')}
-                >
+                <button className="mode-btn mode-fast" onClick={() => startNewGame('company', 'fast')}>
                   🚀 Быстрый режим
                 </button>
               </div>
@@ -778,7 +839,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
           </div>
         </div>
 
-        {/* ===== ОБЩИЕ ПРАВИЛА ===== */}
         <div className="rules-section">
           <h3>📖 Правила игры</h3>
           <div className="rules-grid">
@@ -816,7 +876,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
     );
   }
 
-  // === ЭКРАН ОКОНЧАНИЯ ИГРЫ ===
   if (gameState?.gameOver) {
     return (
       <div className="game-over" data-theme={theme}>
@@ -854,10 +913,8 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
   const currentPlayer = getCurrentPlayer(gameState);
   const isHumanTurn = currentPlayer?.isHuman && !isProcessing && !gameState?.gameOver;
 
-  // === ОСНОВНОЙ ЭКРАН ИГРЫ ===
   return (
     <div className="container" data-theme={theme}>
-      {/* ===== ВЕРХНЯЯ ПАНЕЛЬ ===== */}
       <div className="top-panel">
         <div className="top-panel-left">
           <div className="round">🔁 РАУНД {gameState.currentTurn + 1}</div>
@@ -872,30 +929,18 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
           </div>
         </div>
         <div className="top-panel-right">
-          <button className="top-btn profile-btn" onClick={onShowProfile} title="Профиль">
-            👤
-          </button>
-          <button className="top-btn stats-btn" onClick={() => setShowStats(true)} title="Статистика">
-            📊
-          </button>
-          <button className="top-btn history-btn" onClick={() => setShowHistory(true)} title="История">
-            📜
-          </button>
-          <button className="top-btn exit-btn" onClick={handleExitGame} title="Выйти из игры">
-            🚪
-          </button>
-          <button className="top-btn logout-btn" onClick={onLogout} title="Выйти из аккаунта">
-            🔓
-          </button>
+          <button className="top-btn profile-btn" onClick={onShowProfile} title="Профиль">👤</button>
+          <button className="top-btn stats-btn" onClick={() => setShowStats(true)} title="Статистика">📊</button>
+          <button className="top-btn history-btn" onClick={() => setShowHistory(true)} title="История">📜</button>
+          <button className="top-btn exit-btn" onClick={handleExitGame} title="Выйти из игры">🚪</button>
+          <button className="top-btn logout-btn" onClick={onLogout} title="Выйти из аккаунта">🔓</button>
         </div>
       </div>
 
-      {/* ===== СООБЩЕНИЕ ===== */}
       <div className="message-bar">
         <strong>{message || (isHumanTurn ? '🎯 Ваш ход! Выберите действие' : (isProcessing ? '🤖 Ход бота...' : 'Ожидание...'))}</strong>
       </div>
 
-      {/* ===== КОМПАНИИ ===== */}
       <h2 style={{ color: 'var(--text-white)', marginBottom: '15px', textShadow: '0 2px 10px rgba(0,0,0,0.3)' }}>
         🏢 КОМПАНИИ ({gameState.companies.length})
       </h2>
@@ -932,7 +977,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
         ))}
       </div>
 
-      {/* ===== ХАКЕРЫ ===== */}
       <h2 style={{ color: 'var(--text-white)', marginBottom: '15px', textShadow: '0 2px 10px rgba(0,0,0,0.3)' }}>
         👾 ХАКЕРЫ ({gameState.hackers.length})
       </h2>
@@ -949,7 +993,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
         ))}
       </div>
 
-      {/* ===== РУКА ИГРОКА ===== */}
       {isHumanTurn && (
         <>
           {roleSelection === 'hacker' && (
@@ -991,53 +1034,34 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
             />
           )}
 
-          {/* ===== ПАНЕЛЬ ДЕЙСТВИЙ ===== */}
           <div className="action-panel">
             <div className="actions-row">
               {roleSelection === 'hacker' && (
-                <button
-                  className="btn-attack"
-                  onClick={handleAttack}
-                  disabled={!selectedAttackCard || !selectedCompany}
-                >
+                <button className="btn-attack" onClick={handleAttack} disabled={!selectedAttackCard || !selectedCompany}>
                   ⚔️ АТАКОВАТЬ
                 </button>
               )}
-
               {roleSelection === 'company' && (
-                <button
-                  className="btn-defense"
-                  onClick={handleUseDefense}
-                  disabled={!selectedDefenseCard}
-                >
+                <button className="btn-defense" onClick={handleUseDefense} disabled={!selectedDefenseCard}>
                   🛡️ ЗАЩИТИТЬ
                 </button>
               )}
-
-              <button
-                className="btn-clear"
-                onClick={() => {
-                  setSelectedAttackCard(null);
-                  setSelectedDefenseCard(null);
-                  setSelectedCompany(null);
-                  setMessage('Выбор очищен');
-                }}
-              >
+              <button className="btn-clear" onClick={() => {
+                setSelectedAttackCard(null);
+                setSelectedDefenseCard(null);
+                setSelectedCompany(null);
+                setMessage('Выбор очищен');
+              }}>
                 🗑️ Очистить
               </button>
             </div>
-
-            <button
-              className="btn-end-turn"
-              onClick={endTurn}
-            >
+            <button className="btn-end-turn" onClick={endTurn}>
               ⏭️ ЗАВЕРШИТЬ ХОД
             </button>
           </div>
         </>
       )}
 
-      {/* ===== ИНДИКАТОР ХОДА БОТА ===== */}
       {isProcessing && (
         <div style={{
           marginTop: '20px',
@@ -1053,7 +1077,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
         </div>
       )}
 
-      {/* ===== ЛОГ ИГРЫ ===== */}
       <div className="log-container">
         <div className="log-title">📜 ЛОГ ИГРЫ</div>
         {gameLog.map((log, idx) => (
@@ -1063,34 +1086,25 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
         ))}
       </div>
 
-      {/* ===== МОДАЛЬНОЕ ОКНО ДЛЯ ВЫБОРА ХАРАКТЕРИСТИКИ ===== */}
       {choosingCharacteristic && (
         <div className="modal-overlay" data-theme={theme}>
           <div className="modal-content">
             <h3>Выберите характеристику для атаки</h3>
             {Object.entries(characteristicNames).map(([key, name]) => (
-              <button
-                key={key}
-                className="modal-btn"
-                onClick={() => handleAttackWithChar(key)}
-              >
+              <button key={key} className="modal-btn" onClick={() => handleAttackWithChar(key)}>
                 {characteristicIcons[key] || '📊'} {name}
               </button>
             ))}
-            <button
-              className="modal-btn modal-btn-cancel"
-              onClick={() => {
-                setChoosingCharacteristic(null);
-                setSelectedAttackCard(null);
-              }}
-            >
+            <button className="modal-btn modal-btn-cancel" onClick={() => {
+              setChoosingCharacteristic(null);
+              setSelectedAttackCard(null);
+            }}>
               Отмена
             </button>
           </div>
         </div>
       )}
 
-      {/* ===== МОДАЛЬНОЕ ОКНО СТАТИСТИКИ ===== */}
       {showStats && (
         <Stats
           stats={stats}
@@ -1104,7 +1118,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
         />
       )}
 
-      {/* ===== МОДАЛЬНОЕ ОКНО ИСТОРИИ ===== */}
       {showHistory && (
         <History
           history={stats.history}
