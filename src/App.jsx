@@ -1,6 +1,12 @@
 // ============================================================
 // ГЛАВНЫЙ КОМПОНЕНТ ПРИЛОЖЕНИЯ
 // ============================================================
+window.addEventListener('unhandledrejection', function(e) {
+  if (e.reason?.httpStatus === 403) {
+    e.preventDefault(); // Игнорируем ошибку
+    console.log('Игнорируем ошибку расширения');
+  }
+});
 
 import React, { useState, useEffect } from 'react';
 import { GameBoard } from './components/GameBoard';
