@@ -190,7 +190,16 @@ export function executeAttack(gameState, hackerId, companyId, attackCard, select
   const hacker = gameState.hackers.find(h => h.id === hackerId);
   const company = gameState.companies.find(c => c.id === companyId);
 
+  // ===== ОТЛАДОЧНЫЕ ЛОГИ =====
+  console.log('🔍 АТАКА:');
+  console.log('  - Хакер:', hacker?.name);
+  console.log('  - Компания:', company?.name);
+  console.log('  - Карта атаки:', attackCard?.name, attackCard?.type);
+  console.log('  - Характеристики карты:', attackCard?.characteristics);
+  console.log('  - Характеристики компании:', company?.characteristics);
+
   if (!hacker || !company || hacker.health <= 0 || company.health <= 0) {
+    console.log('❌ Недопустимый ход');
     return { success: false, message: 'Недопустимый ход', gameState };
   }
 
@@ -206,6 +215,10 @@ export function executeAttack(gameState, hackerId, companyId, attackCard, select
     const charValue = company.characteristics?.[char];
     usedCharacteristics = [char];
 
+    console.log('  - Атакуемая характеристика:', char);
+    console.log('  - Значение характеристики:', charValue);
+    console.log('  - Защита:', hasDefense);
+
     if (hasDefense) {
       company.permanentDefenses = company.permanentDefenses.filter(d => d?.characteristic !== char);
       company.temporaryDefenses = company.temporaryDefenses.filter(d => d?.characteristic !== char);
@@ -216,8 +229,12 @@ export function executeAttack(gameState, hackerId, companyId, attackCard, select
       message = `Атака успешна! ${char} уязвима`;
       success = true;
       damage = 1;
-    } else {
+    } else if (charValue === 'high') {
       message = `Атака провалена: ${char} высокая`;
+      success = false;
+      damage = 0;
+    } else {
+      message = `Атака провалена: характеристика ${char} не найдена`;
       success = false;
       damage = 0;
     }
@@ -230,6 +247,10 @@ export function executeAttack(gameState, hackerId, companyId, attackCard, select
     const val1 = company.characteristics?.[char1];
     const val2 = company.characteristics?.[char2];
     usedCharacteristics = [char1, char2];
+
+    console.log('  - Атакуемые характеристики:', char1, char2);
+    console.log('  - Значения:', val1, val2);
+    console.log('  - Защиты:', hasDefense1, hasDefense2);
 
     if (hasDefense1) {
       company.permanentDefenses = company.permanentDefenses.filter(d => d?.characteristic !== char1);
@@ -269,6 +290,10 @@ export function executeAttack(gameState, hackerId, companyId, attackCard, select
     const charValue = company.characteristics?.[selectedChar];
     usedCharacteristics = [selectedChar];
 
+    console.log('  - Выбранная характеристика:', selectedChar);
+    console.log('  - Значение:', charValue);
+    console.log('  - Защита:', hasDefense);
+
     if (hasDefense) {
       company.permanentDefenses = company.permanentDefenses.filter(d => d?.characteristic !== selectedChar);
       company.temporaryDefenses = company.temporaryDefenses.filter(d => d?.characteristic !== selectedChar);
@@ -279,8 +304,12 @@ export function executeAttack(gameState, hackerId, companyId, attackCard, select
       message = `Атака успешна! ${selectedChar} уязвима`;
       success = true;
       damage = 1;
-    } else {
+    } else if (charValue === 'high') {
       message = `Атака провалена: ${selectedChar} высокая`;
+      success = false;
+      damage = 0;
+    } else {
+      message = `Атака провалена: характеристика ${selectedChar} не найдена`;
       success = false;
       damage = 0;
     }
@@ -309,15 +338,19 @@ export function executeAttack(gameState, hackerId, companyId, attackCard, select
   // === ЕСЛИ АТАКА УСПЕШНА ===
   company.health -= damage;
 
+  // ===== РАСКРЫВАЕМ ХАРАКТЕРИСТИКИ =====
   usedCharacteristics.forEach(char => {
+    // Снимаем временные защиты
     if (company.temporaryDefenses) {
       company.temporaryDefenses = company.temporaryDefenses.filter(d => d?.characteristic !== char);
     }
+    // Раскрываем характеристику
     if (!company.revealedCharacteristics) {
       company.revealedCharacteristics = [];
     }
     if (!company.revealedCharacteristics.includes(char)) {
       company.revealedCharacteristics.push(char);
+      console.log(`🔍 Раскрыта характеристика ${char} у компании ${company.name}`);
     }
   });
 
@@ -337,6 +370,7 @@ export function executeAttack(gameState, hackerId, companyId, attackCard, select
     if (index !== -1) gameState.companies.splice(index, 1);
   }
 
+  console.log(`✅ Результат: успех=${success}, урон=${damage}, сообщение=${message}`);
   return { success: true, message, damage, gameState };
 }
 
@@ -380,11 +414,13 @@ export function useDefenseCard(gameState, companyId, defenseCard) {
     company.temporaryDefenses.push(usedCard);
   }
 
+  // Раскрываем защищённую характеристику
   if (!company.revealedCharacteristics) {
     company.revealedCharacteristics = [];
   }
   if (!company.revealedCharacteristics.includes(defenseCard.characteristic)) {
     company.revealedCharacteristics.push(defenseCard.characteristic);
+    console.log(`🔍 Раскрыта характеристика ${defenseCard.characteristic} у компании ${company.name} (через защиту)`);
   }
 
   addToDiscardPile('defense', usedCard);
@@ -406,7 +442,6 @@ export function discardAndDraw(gameState, playerType, playerId, cardId) {
     const hacker = gameState.hackers.find(h => h.id === playerId);
     if (!hacker) return { success: false, message: 'Хакер не найден', gameState };
 
-    // Если cardId === null, просто добираем карту без сброса
     if (cardId === null) {
       const newCard = getNextAttackCard(gameState.attackDeck, gameState.attackDiscardPile, attackCards);
       if (newCard) {
@@ -483,16 +518,13 @@ export function canPlayerActCheck(gameState, player) {
   if (player.health <= 0) return false;
   if (player.isAlive === false) return false;
   
-  // Проверяем, есть ли у игрока карты
   if (!player.hand || player.hand.length === 0) return false;
 
-  // Для хакера: проверяем, есть ли живые компании
   if (player.role === 'hacker') {
     const aliveCompanies = gameState.companies.filter(c => c.isAlive !== false && c.health > 0);
     return aliveCompanies.length > 0;
   }
 
-  // Для компании: всегда может сделать ход (если есть карты)
   return true;
 }
 

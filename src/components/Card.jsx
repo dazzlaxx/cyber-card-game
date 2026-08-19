@@ -1,4 +1,3 @@
-// src/components/Card.jsx
 // ============================================================
 // КОМПОНЕНТ КАРТЫ
 // ============================================================
@@ -32,6 +31,15 @@ export function Card({ card, type, onClick, isSelected }) {
     if (value === 'high') return '#e8f5e9';
     if (value === 'low') return '#ffebee';
     return '#f5f5f5';
+  };
+
+  // Проверяем, защищена ли характеристика
+  const isCharacteristicDefended = (company, characteristic) => {
+    if (type !== 'company') return false;
+    const permanentDefenses = company.permanentDefenses || [];
+    const temporaryDefenses = company.temporaryDefenses || [];
+    return permanentDefenses.some(d => d?.characteristic === characteristic) ||
+           temporaryDefenses.some(d => d?.characteristic === characteristic);
   };
 
   return (
@@ -83,16 +91,11 @@ export function Card({ card, type, onClick, isSelected }) {
             const isRevealed = !card.hideCharacteristics ||
                               (card.revealedCharacteristics && card.revealedCharacteristics.includes(key));
 
-            // ===== ПРОВЕРКА ЗАЩИТ =====
-            const isPermanentDefense = card.permanentDefenses?.some(d => d?.characteristic === key) || false;
-            const isTemporaryDefense = card.temporaryDefenses?.some(d => d?.characteristic === key) || false;
-            const isDefended = isPermanentDefense || isTemporaryDefense;
+            // Проверяем, защищена ли характеристика
+            const defended = isCharacteristicDefended(card, key);
+            const defenseType = card.permanentDefenses?.some(d => d?.characteristic === key) ? '🛡️ Постоянная' :
+                               card.temporaryDefenses?.some(d => d?.characteristic === key) ? '🛡️ Временная' : '';
 
-            let defenseIcon = '';
-            if (isPermanentDefense) defenseIcon = '🛡️ Пост.';
-            else if (isTemporaryDefense) defenseIcon = '⏳ Врем.';
-
-            // Если характеристики скрыты
             if (card.hideCharacteristics && !isRevealed) {
               return (
                 <div key={key} style={{
@@ -108,24 +111,24 @@ export function Card({ card, type, onClick, isSelected }) {
               );
             }
 
-            // Показываем раскрытую характеристику
             return (
-              <div key={key} style={{
-                display: 'flex',
-                justifyContent: 'space-between',
+              <div key={key} style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
                 marginBottom: '3px',
+                alignItems: 'center',
                 animation: card.hideCharacteristics && isRevealed ? 'fadeIn 0.5s ease' : 'none'
               }}>
                 <span>
                   {characteristicIcons[key] || '📊'} {characteristicNames[key]}:
-                  {isDefended && (
-                    <span style={{
+                  {defended && (
+                    <span style={{ 
                       marginLeft: '4px',
                       fontSize: '11px',
                       color: '#f39c12',
                       fontWeight: 'bold'
                     }}>
-                      {defenseIcon}
+                      {defenseType}
                     </span>
                   )}
                 </span>

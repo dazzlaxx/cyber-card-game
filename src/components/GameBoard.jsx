@@ -414,6 +414,14 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
     if (!canPlayerActCheck(newState, currentPlayer)) {
       addLogMessage(`⚠️ ${currentPlayer.name} не может сделать ход! (Нет карт или целей) — ход пропущен.`);
       
+      const handSize = newState.handSize || 3;
+      while (currentPlayer.hand.length < handSize && newState.attackDeck.length > 0) {
+        const newCard = newState.attackDeck.shift();
+        if (newCard) {
+          currentPlayer.hand.push(newCard);
+        }
+      }
+      
       const totalPlayers = newState.hackers.length + newState.companies.length;
       if (totalPlayers > 0) {
         newState.currentPlayerIndex = (newState.currentPlayerIndex + 1) % totalPlayers;
@@ -486,6 +494,20 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
                   addLogMessage(`🤖 ${currentPlayer.name} атакует ${targetCompany.name}: ${result.message} (урон: ${result.damage})`);
                 } else {
                   addLogMessage(`🤖 ${currentPlayer.name} атакует ${targetCompany.name}: ${result.message}`);
+                }
+
+                // Проверяем, что у бота есть карты после атаки
+                const handSize = newState.handSize || 3;
+                while (currentPlayer.hand.length < handSize && newState.attackDeck.length > 0) {
+                  const newCard = newState.attackDeck.shift();
+                  if (newCard) {
+                    currentPlayer.hand.push(newCard);
+                  }
+                }
+                
+                if (currentPlayer.hand.length === 0 && newState.attackDiscardPile.length > 0) {
+                  const result2 = discardAndDraw(newState, 'hacker', currentPlayer.id, null);
+                  newState = result2.gameState;
                 }
               }
             } else {
@@ -647,7 +669,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       return;
     }
 
-    // Сбрасываем флаг действия в этом ходу
     setHasActedThisTurn(false);
 
     const newState = deepCopyGameState(gameState);
@@ -661,11 +682,9 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       }
     }
 
-    // Удаляем мёртвых игроков
     newState.hackers = newState.hackers.filter(h => h.isAlive !== false && h.health > 0);
     newState.companies = newState.companies.filter(c => c.isAlive !== false && c.health > 0);
 
-    // Проверяем, жив ли игрок-человек
     const humanPlayer = newState.hackers.find(h => h.isHuman) || newState.companies.find(c => c.isHuman);
     if (!humanPlayer) {
       newState.gameOver = true;
@@ -718,6 +737,7 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
     addLogMessage('Ход передан следующему игроку');
   };
 
+  // ===== ИСПРАВЛЕННАЯ handleAttack =====
   const handleAttack = () => {
     if (!gameState || isProcessing) return;
 
@@ -727,7 +747,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       return;
     }
 
-    // ===== ПРОВЕРКА: УЖЕ ИСПОЛЬЗОВАЛ КАРТУ В ЭТОМ ХОДУ =====
     if (hasActedThisTurn) {
       setMessage('⚠️ Вы уже использовали карту в этом ходу!');
       return;
@@ -743,9 +762,33 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       return;
     }
 
+    console.log('🎯 handleAttack вызван');
+    console.log('  - Карта:', selectedAttackCard.name);
+    console.log('  - Компания:', selectedCompany.name);
+    console.log('  - Характеристики карты:', selectedAttackCard.characteristics);
+
     let newState = deepCopyGameState(gameState);
+    const companyId = selectedCompany.id;
+    
     const result = executeAttack(newState, currentPlayer.id, selectedCompany.id, selectedAttackCard);
     newState = result.gameState;
+
+    console.log('📊 Результат атаки:', result);
+
+    // ===== ПРИНУДИТЕЛЬНОЕ РАСКРЫТИЕ ХАРАКТЕРИСТИКИ =====
+    const updatedCompany = newState.companies.find(c => c.id === companyId);
+    if (updatedCompany && selectedAttackCard.characteristics) {
+      const chars = selectedAttackCard.characteristics;
+      chars.forEach(char => {
+        if (!updatedCompany.revealedCharacteristics) {
+          updatedCompany.revealedCharacteristics = [];
+        }
+        if (!updatedCompany.revealedCharacteristics.includes(char)) {
+          updatedCompany.revealedCharacteristics.push(char);
+          console.log(`🔍 Принудительно раскрыта характеристика ${char}`);
+        }
+      });
+    }
 
     if (result.success) {
       setCurrentGameData(prev => ({
@@ -758,7 +801,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       addLogMessage(`❌ ${selectedAttackCard.name} -> ${selectedCompany.name}: ${result.message}`);
     }
 
-    // ===== БЛОКИРУЕМ ДАЛЬНЕЙШИЙ ВЫБОР =====
     setHasActedThisTurn(true);
     const afterAttackState = checkGameOver(newState);
     setGameState(afterAttackState);
@@ -768,21 +810,42 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
     setChoosingCharacteristic(null);
   };
 
+  // ===== ИСПРАВЛЕННАЯ handleAttackWithChar =====
   const handleAttackWithChar = (characteristic) => {
     if (!gameState || !choosingCharacteristic || !selectedCompany) return;
 
     const currentPlayer = getCurrentPlayer(gameState);
     if (!currentPlayer || !currentPlayer.isHuman) return;
 
-    // ===== ПРОВЕРКА: УЖЕ ИСПОЛЬЗОВАЛ КАРТУ В ЭТОМ ХОДУ =====
     if (hasActedThisTurn) {
       setMessage('⚠️ Вы уже использовали карту в этом ходу!');
       return;
     }
 
+    console.log('🎯 handleAttackWithChar вызван');
+    console.log('  - Карта:', choosingCharacteristic.name);
+    console.log('  - Компания:', selectedCompany.name);
+    console.log('  - Выбранная характеристика:', characteristic);
+
     let newState = deepCopyGameState(gameState);
+    const companyId = selectedCompany.id;
+    
     const result = executeAttack(newState, currentPlayer.id, selectedCompany.id, choosingCharacteristic, characteristic);
     newState = result.gameState;
+
+    console.log('📊 Результат атаки:', result);
+
+    // ===== ПРИНУДИТЕЛЬНОЕ РАСКРЫТИЕ ХАРАКТЕРИСТИКИ =====
+    const updatedCompany = newState.companies.find(c => c.id === companyId);
+    if (updatedCompany) {
+      if (!updatedCompany.revealedCharacteristics) {
+        updatedCompany.revealedCharacteristics = [];
+      }
+      if (!updatedCompany.revealedCharacteristics.includes(characteristic)) {
+        updatedCompany.revealedCharacteristics.push(characteristic);
+        console.log(`🔍 Принудительно раскрыта характеристика ${characteristic}`);
+      }
+    }
 
     if (result.success) {
       setCurrentGameData(prev => ({
@@ -795,7 +858,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       addLogMessage(`❌ ${choosingCharacteristic.name} -> ${selectedCompany.name}: ${result.message}`);
     }
 
-    // ===== БЛОКИРУЕМ ДАЛЬНЕЙШИЙ ВЫБОР =====
     setHasActedThisTurn(true);
     const afterAttackState = checkGameOver(newState);
     setGameState(afterAttackState);
@@ -814,7 +876,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       return;
     }
 
-    // ===== ПРОВЕРКА: УЖЕ ИСПОЛЬЗОВАЛ КАРТУ В ЭТОМ ХОДУ =====
     if (hasActedThisTurn) {
       setMessage('⚠️ Вы уже использовали карту в этом ходу!');
       return;
@@ -843,7 +904,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       addLogMessage(`🛡️ ${selectedDefenseCard.name} активирована для ${company.name}`);
     }
 
-    // ===== БЛОКИРУЕМ ДАЛЬНЕЙШИЙ ВЫБОР =====
     setHasActedThisTurn(true);
     setGameState(checkGameOver(newState));
     setMessage(result.message);
@@ -859,7 +919,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
       return;
     }
 
-    // ===== ПРОВЕРКА: УЖЕ ИСПОЛЬЗОВАЛ КАРТУ В ЭТОМ ХОДУ =====
     if (hasActedThisTurn) {
       setMessage('⚠️ Вы уже использовали карту в этом ходу!');
       return;
@@ -872,7 +931,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
         const result = discardAndDraw(newState, 'company', currentPlayer.id, card.id);
         newState = result.gameState;
         setGameState(newState);
-        // Бесплатный сброс НЕ блокирует ход
         addLogMessage(`🔄 Карта ${card.name} сброшена бесплатно (высокая характеристика)`);
         setMessage('Карта сброшена бесплатно');
         return;
@@ -886,7 +944,6 @@ export function GameBoard({ user, onLogout, onShowProfile, theme, toggleTheme })
 
     if (result.success) {
       setGameState(newState);
-      // ===== БЛОКИРУЕМ ДАЛЬНЕЙШИЙ ВЫБОР =====
       setHasActedThisTurn(true);
       addLogMessage(`🔄 ${card.name} сброшена и заменена`);
       setMessage(result.message);

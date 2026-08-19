@@ -1,4 +1,7 @@
+// ============================================================
 // КОЛОДА КАРТ АТАКИ
+// ============================================================
+
 // === ОДИНОЧНЫЕ АТАКИ (10 карт) ===
 const singleAttackCards = [
   { id: 'a1', name: 'Фишинговая атака', type: 'single', characteristics: ['informationSecurity'], damage: 1, description: 'Обманные письма, которые выманивают у сотрудников логины и пароли от рабочих аккаунтов.' },
@@ -35,3 +38,5 @@ const chooseCards = [
 ];
 
 export const attackCards = [...singleAttackCards, ...doubleAttackCards, ...chooseCards];
+
+console.log(`✅ Всего карт атаки: ${attackCards.length}`);
